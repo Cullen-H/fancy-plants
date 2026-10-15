@@ -52,6 +52,15 @@ window.FP = window.FP || {};
     return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
   };
 
+  // Canvas text uses the same font as the menus. The family comes from the --font
+  // variable in style.css, so changing the font there changes it everywhere.
+  let fontFamily = null;
+  FP.font = function (weight, size) {
+    if (!fontFamily) fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--font").trim() || "sans-serif";
+    return weight + " " + size + "px " + fontFamily;
+  };
+  FP.refreshFont = () => { fontFamily = null; };
+
   FP.withArticle = name => (/^[aeiou]/i.test(name) ? "an " : "a ") + name;
 
   FP.countOf = (seed, n) => n === 1 ? "1 " + seed.name : n + " " + seed.plural;

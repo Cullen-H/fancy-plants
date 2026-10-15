@@ -12,7 +12,8 @@
   --gold-dark: #c98a0c;
   --red: #e5533d;
   --red-dark: #a83524;
-  --font: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --font: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Bitter", Georgia, serif; /* logo and headings */
 }
 
 * { box-sizing: border-box; }
@@ -632,3 +633,6 @@ html, body {
 
 /* Messages move down while a tutorial tip is showing. */
 .tip:not([hidden]) ~ #toasts { top: 150px; }
+
+/* Headings and the logo use the display font. */
+.logo, .panel-head h2, .section, .card-title, .popup-head b, .weather-text b, .goal-text { font-family: var(--font-display); }

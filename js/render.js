@@ -94,7 +94,7 @@
       const k = item.age / item.life;
       ctx.globalAlpha = 1 - k * k;
       if (item.kind === "text") {
-        ctx.font = "600 20px Fredoka, 'Trebuchet MS', sans-serif";
+        ctx.font = FP.font(600, 20);
         ctx.textAlign = "center";
         ctx.lineWidth = 5;
         ctx.lineJoin = "round";
@@ -544,7 +544,7 @@
       ctx.stroke();
     });
     if (mods.length > shown.length) {
-      ctx.font = `600 ${Math.round(rad * 2)}px Fredoka, 'Trebuchet MS', sans-serif`;
+      ctx.font = FP.font(600, Math.round(rad * 2));
       ctx.textAlign = "left";
       ctx.lineWidth = 3;
       ctx.strokeStyle = "#3a2717";
@@ -987,16 +987,17 @@
 
   // ---------- Tooltip ----------
 
-  const FONT_BOLD = "600 17px Fredoka, 'Trebuchet MS', sans-serif";
-  const FONT = "500 14px Fredoka, 'Trebuchet MS', sans-serif";
+  // Read each time, so a font change in the CSS shows up on the canvas too.
+  const fontBold = () => FP.font(600, 17);
+  const fontText = () => FP.font(500, 14);
 
   function drawBuildingTooltip(ctx, b, view) {
     const def = FP.WORKER_BY_ID[b.workerId];
     const rarity = FP.RARITIES[def.rarity];
     const line2 = "Level " + b.level + ". Click for details.";
-    ctx.font = FONT_BOLD;
+    ctx.font = fontBold();
     let w = ctx.measureText(def.building).width;
-    ctx.font = FONT;
+    ctx.font = fontText();
     w = Math.max(w, ctx.measureText(line2).width) + 26;
     const h = 52;
     const x = FP.clamp(view.mouse.x + 18, 4, FARM.x + FARM.w - w);
@@ -1008,10 +1009,10 @@
     ctx.strokeStyle = rarity.color;
     ctx.stroke();
     ctx.textAlign = "left";
-    ctx.font = FONT_BOLD;
+    ctx.font = fontBold();
     ctx.fillStyle = FP.shade(rarity.color, 0.35);
     ctx.fillText(def.building, x + 13, y + 22);
-    ctx.font = FONT;
+    ctx.font = fontText();
     ctx.fillStyle = "#f3e6d0";
     ctx.fillText(line2, x + 13, y + 41);
   }
@@ -1029,7 +1030,7 @@
     const worthText = "Sells for " + FP.formatCoins(worth);
 
     // Modifier names wrap onto as many lines as they need.
-    ctx.font = FONT;
+    ctx.font = fontText();
     const maxW = 240;
     const modLines = [];
     let line = [], lineW = 0;
@@ -1044,7 +1045,7 @@
 
     let w = Math.max(ctx.measureText(status).width, ctx.measureText(worthText).width);
     modLines.forEach(l => { w = Math.max(w, l.reduce((sum, p) => sum + p.w, 0)); });
-    ctx.font = FONT_BOLD;
+    ctx.font = fontBold();
     w = Math.max(w, ctx.measureText(seed.name).width) + 26;
     const h = 64 + modLines.length * 19;
     const x = FP.clamp(view.mouse.x + 18, 4, FARM.x + FARM.w - w);
@@ -1058,10 +1059,10 @@
     ctx.stroke();
 
     ctx.textAlign = "left";
-    ctx.font = FONT_BOLD;
+    ctx.font = fontBold();
     ctx.fillStyle = FP.shade(rarity.color, 0.35);
     ctx.fillText(seed.name, x + 13, y + 22);
-    ctx.font = FONT;
+    ctx.font = fontText();
     ctx.fillStyle = "#f3e6d0";
     ctx.fillText(status, x + 13, y + 41);
     let ly = y + 41;

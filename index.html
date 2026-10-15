@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fancy Plants</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=0.4.2">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="farm"></canvas>
+
+    <header id="topbar">
+      <div class="logo">Fancy Plants</div>
+      <button id="weather" class="weather">
+        <img alt="">
+        <span class="weather-text"><b id="weather-name"></b><span id="weather-time"></span></span>
+      </button>
+      <div id="coins" class="coins" title="Coins">
+        <span class="coin-icon"></span><span id="coin-count">0</span>
+      </div>
+    </header>
+
+    <aside id="dock">
+      <nav id="tabs">
+        <button data-tab="shop" class="active">Shop</button>
+        <button data-tab="sell">Sell<span id="basket-count" class="badge" hidden></span></button>
+        <button data-tab="upgrades">Upgrades</button>
+        <button data-tab="guide">Guide</button>
+        <button data-tab="options">Options</button>
+      </nav>
+      <section id="panel"></section>
+    </aside>
+
+    <footer id="hotbar">
+      <div id="slots"></div>
+      <button id="harvest-all" class="btn">Harvest all</button>
+    </footer>
+
+    <canvas id="fx"></canvas>
+    <div id="popup" class="popup" hidden></div>
+    <img id="held" alt="">
+    <div id="toasts"></div>
+  </div>
+  <div id="rotate">Turn your phone sideways to play.</div>
+
+  <script src="js/util.js?v=0.4.2"></script>
+  <script src="js/data.js?v=0.4.2"></script>
+  <script src="js/state.js?v=0.4.2"></script>
+  <script src="js/farm.js?v=0.4.2"></script>
+  <script src="js/workers.js?v=0.4.2"></script>
+  <script src="js/plants.js?v=0.4.2"></script>
+  <script src="js/weather.js?v=0.4.2"></script>
+  <script src="js/render.js?v=0.4.2"></script>
+  <script src="js/ui.js?v=0.4.2"></script>
+  <script src="js/main.js?v=0.4.2"></script>
+</body>
+</html>

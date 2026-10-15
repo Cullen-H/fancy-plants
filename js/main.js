@@ -1,0 +1,599 @@
+// Starts the game, handles input, and runs the loop.
+(function (FP) {
+  const AUTOSAVE_MS = 15000;
+
+  let state = FP.load();
+  const firstVisit = !state;
+  if (!state) state = FP.newState();
+
+  // carrying is the plot a trowel lifted a plant from, while you pick where it goes.
+  const view = { hover: null, mouse: null, tool: null, pendingDig: null, carrying: null };
+  const ui = FP.ui;
+  const toast = (msg, special) => ui.toast(msg, special);
+
+  const game = FP.game = {
+    get state() { return state; },
+    action(name, data, el) {
+      if (actions[name]) actions[name](data || {}, el);
+    },
+    // Putting the trowel away drops whatever it was carrying back where it was.
+    onToolChange() {
+      view.carrying = null;
+    },
+  };
+
+  // ---------- Actions from the menus ----------
+
+  function coinsChanged() {
+    ui.bumpCoins();
+    ui.renderPanel(); // prices turn gray or gold depending on what you can afford
+    if (ui.selected) ui.renderPopup();
+  }
+
+  // Sends a handful of coins from a button up to the coin counter.
+  function flyCoins(el, count) {
+    const from = el ? FP.renderer.centerOf(el) : { x: 1090, y: 200 };
+    const to = ui.coinTarget();
+    const n = FP.clamp(count, 3, 14);
+    ui.holdCoinsUntil = Date.now() + 550;
+    for (let i = 0; i < n; i++) {
+      FP.fx.fly({
+        from: { x: from.x + (Math.random() - 0.5) * 60, y: from.y + (Math.random() - 0.5) * 16 },
+        to, delay: i * 0.045, dur: 0.55, lift: 60 + Math.random() * 60,
+        draw: FP.drawCoin, size: 1.1, endSize: 0.8,
+        onArrive: ui.bumpCoins,
+      });
+    }
+  }
+
+  // A bought item drops from the shop into its slot in the seed bar.
+  function flyToSlot(from, type, id, draw) {
+    const slotEl = ui.slotFor(type, id);
+    if (!from || !slotEl) return;
+    FP.fx.fly({
+      from, to: FP.renderer.centerOf(slotEl), dur: 0.6, lift: 80,
+      draw, size: 0.9, endSize: 0.7,
+      onArrive: () => ui.pulseSlot(type, id),
+    });
+  }
+
+  const actions = {
+    buy(d, el) {
+      const slot = state.shop.stock[Number(d.index)];
+      const err = FP.buySeed(state, Number(d.index));
+      if (err) return toast(err);
+      const seed = FP.SEED_BY_ID[slot.seedId];
+      const from = el && FP.renderer.centerOf(el); // measured now, because the menu is about to redraw
+      toast("You bought " + FP.withArticle(seed.name) + " seed.");
+      if (!ui.tool) ui.tool = { type: "seed", seedId: seed.id };
+      coinsChanged();
+      ui.renderHotbar();
+      flyToSlot(from, "seed", seed.id, FP.drawIcon(seed));
+    },
+
+    buyTool(d, el) {
+      const tool = FP.TOOL_BY_ID[d.id];
+      const err = FP.buyTool(state, d.id);
+      if (err) return toast(err);
+      const from = el && FP.renderer.centerOf(el);
+      toast("You bought " + FP.withArticle(tool.name) + ".");
+      coinsChanged();
+      ui.renderHotbar();
+      const img = new Image();
+      img.src = FP.toolIconURL(tool);
+      flyToSlot(from, "tool", tool.id, (ctx, x, y, size) => ctx.drawImage(img, x - 26 * size, y - 26 * size, 52 * size, 52 * size));
+    },
+
+    hire(d, el) {
+      const def = FP.WORKER_BY_ID[d.id];
+      const err = FP.buyWorker(state, d.id);
+      if (err) return toast(err);
+      const from = el && FP.renderer.centerOf(el);
+      toast("You hired " + FP.withArticle(def.name) + ". Place their " + def.building + " on an empty plot.");
+      ui.tool = { type: "building", workerId: def.id };
+      coinsChanged();
+      ui.renderHotbar();
+      const img = new Image();
+      img.src = FP.buildingIconURL(def);
+      flyToSlot(from, "building", def.id, (ctx, x, y, size) => ctx.drawImage(img, x - 26 * size, y - 26 * size, 52 * size, 52 * size));
+    },
+
+    upgradeBuilding(d) {
+      const b = state.buildings.find(other => other.uid === d.uid);
+      if (!b) return;
+      const err = FP.upgradeBuilding(state, b);
+      if (err) return toast(err);
+      const r = FP.plotRect(FP.layout(state), b.x, b.y);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, "#ffd23f", 16, 0.9);
+      toast("The " + FP.WORKER_BY_ID[b.workerId].building + " is now level " + b.level + ".");
+      coinsChanged();
+    },
+
+    pickUp(d) {
+      const b = state.buildings.find(other => other.uid === d.uid);
+      if (!b) return;
+      FP.pickUpBuilding(state, b);
+      ui.closeBuilding();
+      toast("The " + FP.WORKER_BY_ID[b.workerId].building + " is back in your bar. It kept its level.");
+      ui.renderHotbar();
+    },
+
+    upgrade(d) {
+      const u = FP.UPGRADE_BY_ID[d.id];
+      const err = FP.buyUpgrade(state, d.id);
+      if (err) return toast(err);
+      toast(u.name + " is now level " + FP.upgradeLevel(state, d.id) + ".");
+      coinsChanged();
+    },
+
+    sell(d, el) {
+      const group = FP.harvestGroups(state).find(g => g.key === d.key);
+      if (!group) return;
+      const res = FP.sellGroup(state, d.key);
+      flyCoins(el, res.count);
+      toast("You sold " + FP.countOf(group.seed, res.count) + " for " + FP.formatCoins(res.coins) + " coins.");
+      coinsChanged();
+    },
+
+    sellAll(d, el) {
+      const res = FP.sellHarvest(state, null);
+      if (!res.count) return;
+      flyCoins(el, res.count);
+      toast("You sold everything for " + FP.formatCoins(res.coins) + " coins.");
+      coinsChanged();
+    },
+
+    expand() {
+      const err = FP.expand(state);
+      if (err) return toast(err);
+      toast("Your farm is now " + state.cols + " by " + state.rows + ".");
+      coinsChanged();
+    },
+
+    harvestAll() {
+      const now = Date.now();
+      const cells = FP.ripeCells(state, now);
+      if (cells.length === 0) return toast("Nothing is ready to harvest yet.");
+      cells.forEach((c, i) => harvestAt(c.x, c.y, now, i * 0.05, true));
+      toast("You harvested " + cells.length + (cells.length === 1 ? " plant." : " plants."));
+      ui.refreshTab("sell");
+    },
+
+    save() {
+      if (FP.save(state)) toast("Your farm has been saved.");
+      else toast("The game couldn't save. Your browser might be blocking storage.");
+    },
+
+    reset() {
+      if (!window.confirm("Start a new farm? Your current farm, coins, and seeds will be erased.")) return;
+      FP.clearSave();
+      state = FP.newState();
+      FP.refreshShop(state, Date.now());
+      FP.fx.clear();
+      FP.renderer.forget();
+      FP.renderer.clearWorkers();
+      ui.closeBuilding();
+      ui.tool = null;
+      view.carrying = null;
+      ui.shownCoins = state.coins;
+      ui.els.coinCount.textContent = FP.formatCoins(state.coins);
+      ui.refresh();
+      FP.save(state);
+      toast("You have a brand new farm.");
+    },
+  };
+
+  // ---------- Clicking on the farm ----------
+
+  // The crop jumps out of the plot and flies into the Sell tab.
+  function harvestAt(x, y, now, delay = 0, quiet = false) {
+    const item = FP.harvestPlot(state, x, y, now);
+    if (!item) return false;
+    const seed = FP.SEED_BY_ID[item.seedId];
+    const r = FP.plotRect(FP.layout(state), x, y);
+    FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.5, seed.color, 10);
+    // Bulk harvests skip the label, since a dozen of them at once just pile up.
+    if (!quiet) FP.fx.text(r.x + r.s / 2, r.y + r.s * 0.3, "+1 " + seed.name, FP.shade(FP.RARITIES[seed.rarity].color, 0.45));
+    const tab = document.querySelector('#tabs [data-tab="sell"]');
+    FP.fx.fly({
+      from: { x: r.x + r.s / 2, y: r.y + r.s * 0.45 }, to: FP.renderer.centerOf(tab),
+      delay, dur: 0.75, lift: 120, draw: FP.drawIcon(seed), size: 1, endSize: 0.45,
+      onArrive: () => ui.pulseTab("sell"),
+    });
+    return true;
+  }
+
+  let lastHint = 0;
+
+  function useCell(cell, isDrag) {
+    const now = Date.now();
+    const { x, y } = cell;
+    const plant = state.plots[y][x];
+    const tool = ui.tool;
+    const building = FP.buildingAt(state, x, y);
+
+    if (tool && tool.type === "building" && !building) {
+      if (isDrag) return;
+      const def = FP.WORKER_BY_ID[tool.workerId];
+      const err = FP.placeBuilding(state, tool.workerId, x, y, now);
+      if (err) return toast(err);
+      const r = FP.plotRect(FP.layout(state), x, y);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.7, "#c9a26b", 14, 0.8);
+      toast("The " + def.name + " moved into the " + def.building + ".");
+      if (!state.workerBag.some(w => w.workerId === tool.workerId)) ui.tool = null;
+      ui.renderHotbar();
+      ui.openBuilding(FP.buildingAt(state, x, y).uid);
+      return;
+    }
+
+    // Clicking a building opens its menu. Clicking it again closes it.
+    if (building) {
+      if (isDrag) return;
+      if (ui.selected === building.uid) ui.closeBuilding();
+      else ui.openBuilding(building.uid);
+      return;
+    }
+    if (ui.selected && !isDrag) ui.closeBuilding();
+
+    if (tool && tool.type === "shovel") {
+      if (!isDrag) dig(x, y, plant, now);
+      return;
+    }
+
+    if (tool && tool.type === "tool") {
+      useTool(tool.toolId, x, y, plant, now, isDrag);
+      return;
+    }
+
+    if (plant) {
+      if (harvestAt(x, y, now)) ui.refreshTab("sell");
+      return;
+    }
+
+    if (tool && tool.type === "seed") {
+      const err = FP.plantSeed(state, x, y, tool.seedId, now);
+      if (err) {
+        if (!isDrag) toast(err);
+        return;
+      }
+      const r = FP.plotRect(FP.layout(state), x, y);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 6);
+      if (!state.seeds[tool.seedId]) {
+        ui.tool = null;
+        toast("That was your last " + FP.SEED_BY_ID[tool.seedId].name + " seed.");
+      }
+      ui.renderHotbar();
+      return;
+    }
+
+    // Clicked an empty plot with nothing in hand.
+    if (!isDrag && now - lastHint > 4000) {
+      lastHint = now;
+      toast(Object.keys(state.seeds).length
+        ? "Pick a seed from the bar below, then click an empty plot."
+        : "You need seeds first. The shop on the right sells them.");
+    }
+  }
+
+  function useTool(id, x, y, plant, now, isDrag) {
+    const def = FP.TOOL_BY_ID[id];
+    const r = FP.plotRect(FP.layout(state), x, y);
+
+    if (id === "trowel") {
+      if (isDrag) return;
+      const from = view.carrying;
+      if (!from) {
+        if (!plant) return toast("Click a plant to lift it with the Trowel.");
+        view.carrying = { x, y };
+        return toast("Now click an empty plot to move the " + FP.SEED_BY_ID[plant.seedId].name + ".");
+      }
+      if (from.x === x && from.y === y) {
+        view.carrying = null;
+        return toast("You put the plant back.");
+      }
+      const moving = state.plots[from.y][from.x];
+      const err = FP.movePlant(state, from, { x, y });
+      if (err) return toast(err);
+      view.carrying = null;
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 8);
+      toast("You moved the " + FP.SEED_BY_ID[moving.seedId].name + ".");
+      afterToolUse(id);
+      return;
+    }
+
+    // The watering can and fertilizer can be dragged across a row. The others take one click each.
+    if (isDrag && !def.grow) return;
+    const res = FP.useTool(state, id, x, y, now);
+    if (res.error) {
+      if (!isDrag) toast(res.error);
+      return;
+    }
+    if (def.grow) {
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, id === "can" ? "#6fb7ff" : "#c9a26b", 9, 0.7);
+    } else {
+      celebrateMod(x, y, plant, res.modId, res.result);
+    }
+    afterToolUse(id);
+  }
+
+  function afterToolUse(id) {
+    if (!state.tools[id]) {
+      ui.tool = null;
+      view.carrying = null;
+      toast("That was the last use of your " + FP.TOOL_BY_ID[id].name + ".");
+    }
+    ui.renderHotbar();
+  }
+
+  // Sparkles and messages when a plant gains a modifier, a fusion, or a first time discovery.
+  function celebrateMod(x, y, plant, modId, result) {
+    const r = FP.plotRect(FP.layout(state), x, y);
+    const cx = r.x + r.s / 2, cy = r.y + r.s * 0.4;
+    const seed = FP.SEED_BY_ID[plant.seedId];
+    const t = Date.now() / 1000;
+    FP.fx.burst(cx, cy, FP.modColor(modId, t), 10, 0.7);
+    if (result.fused.length) {
+      const top = result.fused[result.fused.length - 1];
+      FP.fx.burst(cx, cy, FP.modColor(top, t), 22, 1.1);
+      FP.fx.burst(cx, cy, "#ffffff", 10, 1.1);
+      FP.fx.text(cx, cy - 10, FP.MODS[top].name + "!", FP.shade(FP.modColor(top, t), 0.3));
+      const isNew = result.newFinds.includes(top);
+      toast(isNew
+        ? "New fusion found. Your " + seed.name + " became " + FP.MODS[top].name + "."
+        : "Your " + seed.name + " became " + FP.MODS[top].name + ".", isNew);
+      ui.refreshTab("guide");
+    } else {
+      FP.fx.text(cx, cy - 10, FP.MODS[modId].name, FP.shade(FP.modColor(modId, t), 0.3));
+    }
+  }
+
+  // The shovel asks for a second click so a misclick can't destroy a plant.
+  function dig(x, y, plant, now) {
+    if (!plant) return toast("There's nothing planted here.");
+    const seed = FP.SEED_BY_ID[plant.seedId];
+    const p = view.pendingDig;
+    if (p && p.x === x && p.y === y && now < p.until) {
+      FP.digUp(state, x, y);
+      view.pendingDig = null;
+      const r = FP.plotRect(FP.layout(state), x, y);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 10);
+      toast("You dug up the " + seed.name + ".");
+      return;
+    }
+    view.pendingDig = { x, y, until: now + 2500 };
+    toast("Click again to dig up the " + seed.name + ".");
+  }
+
+  // ---------- Input ----------
+
+  const stage = document.getElementById("stage");
+  const canvas = document.getElementById("farm");
+  const held = document.getElementById("held");
+  let heldSrc = "";
+  let dragging = false;
+  let touching = false;
+  let dragCell = null;
+
+  const toGame = e => FP.renderer.toGame(e.clientX, e.clientY);
+
+  // Shows what you're holding next to the mouse while it's over the farm.
+  // A trowel carrying a plant shows the plant instead.
+  function updateHeld() {
+    const tool = ui.tool;
+    if (!tool || !view.mouse) {
+      held.style.display = "none";
+      return;
+    }
+    let src;
+    if (view.carrying) {
+      const plant = state.plots[view.carrying.y][view.carrying.x];
+      src = FP.seedIconURL(FP.SEED_BY_ID[plant.seedId]);
+    } else if (tool.type === "shovel") src = FP.shovelIconURL();
+    else if (tool.type === "tool") src = FP.toolIconURL(FP.TOOL_BY_ID[tool.toolId]);
+    else if (tool.type === "building") src = FP.buildingIconURL(FP.WORKER_BY_ID[tool.workerId]);
+    else src = FP.seedIconURL(FP.SEED_BY_ID[tool.seedId]);
+    if (src !== heldSrc) {
+      held.src = src;
+      heldSrc = src;
+    }
+    held.style.display = "block";
+    held.style.transform = `translate(${view.mouse.x + 8}px, ${view.mouse.y + 6}px)`;
+  }
+
+  const sameCell = (a, b) => a && b && a.x === b.x && a.y === b.y;
+
+  canvas.addEventListener("pointerdown", e => {
+    if (e.button === 2) {
+      ui.setTool(null);
+      return;
+    }
+    view.mouse = toGame(e);
+    const cell = FP.plotAt(state, view.mouse.x, view.mouse.y);
+    view.hover = cell;
+    touching = e.pointerType === "touch";
+    dragging = true;
+    dragCell = cell;
+    if (cell) useCell(cell, false);
+  });
+
+  // Holding the mouse down and dragging plants or harvests a whole row at once.
+  canvas.addEventListener("pointermove", e => {
+    view.mouse = toGame(e);
+    view.hover = FP.plotAt(state, view.mouse.x, view.mouse.y);
+    if (dragging && view.hover && !sameCell(view.hover, dragCell)) {
+      dragCell = view.hover;
+      useCell(view.hover, true);
+    }
+  });
+
+  // On a touch screen the finger lifting counts as leaving, so the tooltip stays until the next tap.
+  canvas.addEventListener("pointerleave", () => {
+    if (touching) return;
+    view.hover = null;
+    view.mouse = null;
+  });
+
+  window.addEventListener("pointerup", () => {
+    dragging = false;
+    dragCell = null;
+  });
+
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      ui.setTool(null);
+      ui.closeBuilding();
+    }
+    else if (e.key === "q" || e.key === "Q") ui.selectSlot("shovel");
+    else if (e.key === "h" || e.key === "H") actions.harvestAll();
+    else if (/^[1-9]$/.test(e.key)) {
+      const item = ui.hotbarItems()[Number(e.key) - 1];
+      if (item) ui.selectSlot(item.type, item.id);
+    }
+  });
+
+  function fit() {
+    // A tab opened in the background can report a size of 0, which would break the canvas.
+    if (window.innerWidth < 10 || window.innerHeight < 10) return;
+    const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    const offX = (window.innerWidth - 1280 * scale) / 2;
+    const offY = (window.innerHeight - 720 * scale) / 2;
+    stage.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
+    FP.renderer.resize(scale * (window.devicePixelRatio || 1));
+  }
+
+  // ---------- Saving ----------
+
+  setInterval(() => FP.save(state), AUTOSAVE_MS);
+  window.addEventListener("pagehide", () => FP.save(state));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") FP.save(state);
+  });
+
+  // ---------- Loop ----------
+
+  let last = performance.now();
+  let nextCheck = 0;
+  let nextWeatherTick = 0;
+
+  function updateWeather(now) {
+    if (now >= state.weather.endsAt) {
+      const next = FP.nextWeather(state, now);
+      toast(next.start);
+      ui.pulseWeather();
+      ui.refreshTab("guide");
+    }
+    if (now >= nextWeatherTick) {
+      nextWeatherTick = now + FP.WEATHER_TICK_MS;
+      FP.weatherTick(state, celebrateMod);
+    }
+  }
+
+  // Plays what a worker did once they or their bee get to the plot.
+  function onWorkerEvent(b, event) {
+    FP.renderer.workerEvent(state, b, event, () => {
+      const L = FP.layout(state);
+      if (event.kind === "walk") {
+        const r = FP.plotRect(L, event.x, event.y);
+        if (event.action === "water") {
+          FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.45, "#6fb7ff", 8, 0.6);
+        } else {
+          const seed = FP.SEED_BY_ID[event.seedId];
+          FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.5, seed.color, 8, 0.7);
+          const tab = document.querySelector('#tabs [data-tab="sell"]');
+          FP.fx.fly({
+            from: { x: r.x + r.s / 2, y: r.y + r.s * 0.45 }, to: FP.renderer.centerOf(tab),
+            dur: 0.75, lift: 120, draw: FP.drawIcon(seed), size: 0.8, endSize: 0.45,
+            onArrive: () => { ui.pulseTab("sell"); ui.refreshTab("sell"); },
+          });
+        }
+      } else if (event.kind === "pulse") {
+        event.gains.forEach(g => {
+          const plant = state.plots[g.y][g.x];
+          if (plant) celebrateMod(g.x, g.y, plant, g.modId, g.result);
+        });
+      } else if (event.kind === "bee") {
+        const r = FP.plotRect(L, event.x, event.y);
+        FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, "#ffcf3a", 4, 0.4);
+        const plant = state.plots[event.y][event.x];
+        if (event.gain && plant) celebrateMod(event.x, event.y, plant, event.gain.modId, event.gain.result);
+      }
+    });
+  }
+
+  // Golden and Prismatic plants get announced once, when they first show up.
+  function announceLucky() {
+    state.plots.forEach((row, y) => row.forEach((plant, x) => {
+      if (!plant || !plant.luckyNew) return;
+      const id = plant.luckyNew;
+      delete plant.luckyNew;
+      const seed = FP.SEED_BY_ID[plant.seedId];
+      const r = FP.plotRect(FP.layout(state), x, y);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, id === "golden" ? "#ffd23f" : "#e07cff", 18, 1);
+      toast("Lucky! Your " + seed.name + " is growing " + FP.MODS[id].name + ".", true);
+      ui.refreshTab("guide");
+    }));
+  }
+
+  function frame(ts) {
+    const dt = Math.min(0.05, (ts - last) / 1000);
+    last = ts;
+    const now = Date.now();
+
+    if (now >= state.shop.nextRefresh) {
+      FP.refreshShop(state, now);
+      toast("The seed shop has new stock.");
+      ui.refreshTab("shop");
+    }
+
+    if (now >= nextCheck) {
+      nextCheck = now + 2000;
+      if (view.pendingDig && now > view.pendingDig.until) view.pendingDig = null;
+      if (FP.isStuck(state)) {
+        state.seeds.carrot = 1;
+        toast("A neighbor saw your empty farm and left you a Carrot seed.");
+        ui.renderHotbar();
+      }
+    }
+
+    updateWeather(now);
+    FP.runWorkers(state, now, onWorkerEvent);
+    announceLucky();
+    if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
+
+    view.tool = ui.tool;
+    view.selected = ui.selected;
+    updateHeld();
+    ui.tick(now, dt);
+    FP.renderer.draw(state, now, dt, view);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Start ----------
+
+  FP.renderer.init(canvas, document.getElementById("fx"));
+  FP.SEEDS.forEach(FP.seedIconImage); // load the flying crop pictures ahead of time
+  fit();
+  window.addEventListener("resize", fit);
+
+  const startNow = Date.now();
+  if (startNow >= state.shop.nextRefresh) FP.refreshShop(state, startNow);
+  // Weather doesn't happen while the game is closed, so a returning player starts fresh.
+  if (startNow >= state.weather.endsAt) FP.nextWeather(state, startNow);
+  nextWeatherTick = startNow + FP.WEATHER_TICK_MS;
+  ui.init(game);
+
+  if (firstVisit) {
+    ui.tool = { type: "seed", seedId: "carrot" };
+    ui.renderHotbar();
+    toast("Welcome to your farm. Click a plot to plant your first carrot.");
+  } else {
+    const ripe = FP.ripeCells(state, startNow).length;
+    toast(ripe > 0
+      ? "Welcome back. " + (ripe === 1 ? "1 plant is" : ripe + " plants are") + " ready to harvest."
+      : "Welcome back to your farm.");
+  }
+
+  requestAnimationFrame(frame);
+})(window.FP);

@@ -1,0 +1,506 @@
+// The HTML menus: top bar, side menu tabs, seed bar, and messages.
+(function (FP) {
+  const $ = sel => document.querySelector(sel);
+
+  const ui = FP.ui = {
+    tab: "shop",
+    shopView: "seeds", // the shop shows seeds or tools
+    tool: null,        // { type: "seed", seedId }, { type: "tool", toolId }, { type: "building", workerId }, { type: "shovel" }, or null
+    selected: null,    // uid of the building whose popup is open
+    shownCoins: 0,     // the number on screen, which counts toward the real total
+    els: null,
+    lastRipe: -1,
+    lastBasket: -1,
+    lastWeather: "",
+    holdCoinsUntil: 0, // the coin counter waits while coins are still flying toward it
+  };
+
+  ui.init = function (game) {
+    ui.game = game;
+    ui.els = {
+      coins: $("#coins"),
+      coinCount: $("#coin-count"),
+      panel: $("#panel"),
+      tabs: $("#tabs"),
+      slots: $("#slots"),
+      harvestAll: $("#harvest-all"),
+      toasts: $("#toasts"),
+      basketCount: $("#basket-count"),
+      weather: $("#weather"),
+      weatherIcon: $("#weather img"),
+      weatherName: $("#weather-name"),
+      weatherTime: $("#weather-time"),
+      popup: $("#popup"),
+    };
+    ui.shownCoins = game.state.coins;
+    ui.els.coinCount.textContent = FP.formatCoins(ui.shownCoins);
+
+    ui.els.tabs.addEventListener("click", e => {
+      const b = e.target.closest("button[data-tab]");
+      if (b) ui.setTab(b.dataset.tab);
+    });
+    ui.els.panel.addEventListener("click", e => {
+      const b = e.target.closest("[data-action]");
+      if (!b || b.disabled) return;
+      if (b.dataset.action === "shopView") {
+        ui.shopView = b.dataset.view;
+        ui.renderPanel();
+        ui.els.panel.scrollTop = 0;
+        return;
+      }
+      game.action(b.dataset.action, b.dataset, b);
+    });
+    ui.els.slots.addEventListener("click", e => {
+      const b = e.target.closest(".slot");
+      if (b) ui.selectSlot(b.dataset.type, b.dataset.id);
+    });
+    // The seed bar scrolls sideways with the mouse wheel once it fills up.
+    ui.els.slots.addEventListener("wheel", e => {
+      ui.els.slots.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+    ui.els.harvestAll.addEventListener("click", () => game.action("harvestAll", {}));
+    ui.els.weather.addEventListener("click", () => ui.setTab("guide"));
+    ui.els.popup.addEventListener("click", e => {
+      const b = e.target.closest("[data-action]");
+      if (b && !b.disabled) game.action(b.dataset.action, b.dataset, b);
+    });
+
+    ui.refresh();
+  };
+
+  ui.refresh = function () {
+    ui.renderPanel();
+    ui.renderHotbar();
+  };
+
+  ui.setTab = function (tab) {
+    ui.tab = tab;
+    [...ui.els.tabs.children].forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    ui.renderPanel();
+    ui.els.panel.scrollTop = 0;
+  };
+
+  // Re-render only the tab that shows this kind of change.
+  ui.refreshTab = function (tab) {
+    if (ui.tab === tab) ui.renderPanel();
+  };
+
+  // ---------- Seed bar ----------
+
+  ui.setTool = function (tool) {
+    ui.tool = tool;
+    ui.renderHotbar();
+    if (ui.game.onToolChange) ui.game.onToolChange();
+  };
+
+  const isHeld = (type, id) => {
+    const t = ui.tool;
+    if (!t || t.type !== type) return false;
+    if (type === "shovel") return true;
+    return (type === "seed" ? t.seedId : type === "tool" ? t.toolId : t.workerId) === id;
+  };
+
+  // Clicking the selected slot again puts it away.
+  ui.selectSlot = function (type, id) {
+    if (isHeld(type, id)) return ui.setTool(null);
+    if (type === "shovel") ui.setTool({ type: "shovel" });
+    else if (type === "seed") ui.setTool({ type: "seed", seedId: id });
+    else if (type === "building") ui.setTool({ type: "building", workerId: id });
+    else ui.setTool({ type: "tool", toolId: id });
+  };
+
+  // Everything in the bar after the shovel: buildings, then tools, then seeds. Keys 1 to 9 follow this order.
+  ui.hotbarItems = function () {
+    const state = ui.game.state;
+    return [
+      ...FP.WORKERS.filter(w => state.workerBag.some(b => b.workerId === w.id)).map(w => ({ type: "building", id: w.id })),
+      ...FP.TOOLS.filter(t => state.tools[t.id] > 0).map(t => ({ type: "tool", id: t.id })),
+      ...FP.SEEDS.filter(s => state.seeds[s.id] > 0).map(s => ({ type: "seed", id: s.id })),
+    ];
+  };
+
+  function slotInfo(state, item) {
+    if (item.type === "building") {
+      const def = FP.WORKER_BY_ID[item.id];
+      return { name: def.building, icon: FP.buildingIconURL(def), count: state.workerBag.filter(b => b.workerId === item.id).length,
+        title: `${def.building}. Click an empty plot to place it.` };
+    }
+    if (item.type === "tool") {
+      const def = FP.TOOL_BY_ID[item.id];
+      return { name: def.name, icon: FP.toolIconURL(def), count: state.tools[item.id], title: `${def.name}. ${def.desc}` };
+    }
+    const def = FP.SEED_BY_ID[item.id];
+    return { name: def.name, icon: FP.seedIconURL(def), count: state.seeds[item.id], title: `${def.name} seed` };
+  }
+
+  ui.renderHotbar = function () {
+    const state = ui.game.state;
+    const items = ui.hotbarItems();
+    let html = `<button class="slot ${isHeld("shovel") ? "selected" : ""}" data-type="shovel" title="Shovel (Q). Digs up a plant.">
+      <img src="${FP.shovelIconURL()}" alt="Shovel"><span class="key">Q</span></button>
+      <div class="slot-divider"></div>`;
+    if (items.length === 0) {
+      html += `<div class="hint">You have no seeds. Buy some from the shop.</div>`;
+    }
+    items.forEach((item, i) => {
+      const info = slotInfo(state, item);
+      html += `<button class="slot ${item.type === "seed" ? "" : item.type} ${isHeld(item.type, item.id) ? "selected" : ""}" data-type="${item.type}" data-id="${item.id}" title="${info.title}">
+        <img src="${info.icon}" alt="${info.name}">
+        ${i < 9 ? `<span class="key">${i + 1}</span>` : ""}
+        <span class="count">${info.count}</span></button>`;
+      if (items[i + 1] && items[i + 1].type !== item.type) html += `<div class="slot-divider"></div>`;
+    });
+    ui.els.slots.innerHTML = html;
+  };
+
+  // ---------- Side menu ----------
+
+  const coin = `<span class="coin-icon small"></span>`;
+
+  function growText(seed) {
+    let text = "Grows in " + FP.formatTime(seed.grow * 1000);
+    if (seed.regrow) text += ", then regrows";
+    return text;
+  }
+
+  // A small colored label for a modifier. Prismatic gets a rainbow.
+  function modTag(id, hidden) {
+    if (hidden) return `<span class="mod unknown">???</span>`;
+    const mod = FP.MODS[id];
+    const style = mod.color === "rainbow" ? "" : `style="--mod:${mod.color}"`;
+    return `<span class="mod ${mod.color === "rainbow" ? "rainbow" : ""}" ${style}>${mod.name}</span>`;
+  }
+  ui.modTag = modTag;
+
+  const mult = id => "x" + FP.formatCoins(FP.MODS[id].mult);
+
+  function seedRows(state) {
+    return state.shop.stock.map((slot, i) => {
+      const seed = FP.SEED_BY_ID[slot.seedId];
+      const rarity = FP.RARITIES[seed.rarity];
+      const sold = slot.left <= 0;
+      const poor = state.coins < seed.price;
+      return `<li class="row ${sold ? "sold" : ""}" style="--rarity:${rarity.color}">
+        <img class="icon" src="${FP.seedIconURL(seed)}" alt="">
+        <div class="info">
+          <div class="name">${seed.name}</div>
+          <div class="meta"><span class="tag">${rarity.name}</span>Sells for ${FP.formatCoins(seed.value)}</div>
+          <div class="meta">${growText(seed)}</div>
+        </div>
+        <div class="buy">
+          <button class="btn btn-gold ${poor ? "poor" : ""}" data-action="buy" data-index="${i}" ${sold ? "disabled" : ""}>${coin}${FP.formatCoins(seed.price)}</button>
+          <div class="stock">${sold ? "Sold out" : slot.left + " left"}</div>
+        </div>
+      </li>`;
+    }).join("");
+  }
+
+  function toolRows(state) {
+    return FP.TOOLS.map(tool => {
+      const rarity = FP.RARITIES[tool.rarity];
+      const poor = state.coins < tool.price;
+      const owned = state.tools[tool.id] || 0;
+      return `<li class="row" style="--rarity:${rarity.color}">
+        <img class="icon" src="${FP.toolIconURL(tool)}" alt="">
+        <div class="info">
+          <div class="name">${tool.name}</div>
+          <div class="meta"><span class="tag">${rarity.name}</span>${tool.uses === 1 ? "1 use" : tool.uses + " uses"}</div>
+          <div class="meta">${tool.desc}</div>
+        </div>
+        <div class="buy">
+          <button class="btn btn-gold ${poor ? "poor" : ""}" data-action="buyTool" data-id="${tool.id}">${coin}${FP.formatCoins(tool.price)}</button>
+          <div class="stock">${owned ? owned + " owned" : ""}</div>
+        </div>
+      </li>`;
+    }).join("");
+  }
+
+  const plots = n => n === 1 ? "1 plot" : n + " plots";
+
+  // One line that sums up a worker at a given level.
+  function workerStats(def, level) {
+    const i = level - 1;
+    let text = `Works every ${def.every[i]}s and reaches plants up to ${plots(def.range[i])} away.`;
+    if (def.bees) text += ` Keeps ${def.bees[i]} bees.`;
+    if (def.chance) text += ` ${Math.round(def.chance[i] * 100)}% chance of ${FP.MODS[def.mod].name} each time.`;
+    return text;
+  }
+  ui.workerStats = workerStats;
+
+  function workerRows(state) {
+    return FP.WORKERS.map(def => {
+      const rarity = FP.RARITIES[def.rarity];
+      const price = FP.workerPrice(state, def.id);
+      const owned = state.buildings.filter(b => b.workerId === def.id).length + state.workerBag.filter(b => b.workerId === def.id).length;
+      return `<li class="row" style="--rarity:${rarity.color}">
+        <img class="icon" src="${FP.buildingIconURL(def)}" alt="">
+        <div class="info">
+          <div class="name">${def.name}</div>
+          <div class="meta"><span class="tag">${rarity.name}</span>Lives in a ${def.building}</div>
+          <div class="meta">${def.desc}</div>
+        </div>
+        <div class="buy">
+          <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-action="hire" data-id="${def.id}">${coin}${FP.formatCoins(price)}</button>
+          <div class="stock">${owned ? owned + " hired" : ""}</div>
+        </div>
+      </li>`;
+    }).join("");
+  }
+
+  const SHOP_VIEWS = {
+    seeds: state => ({ head: `<h2>Seed Shop</h2><p class="sub">New stock arrives in <b id="shop-timer">${FP.formatClock(state.shop.nextRefresh - Date.now())}</b></p>`, rows: seedRows(state) }),
+    tools: state => ({ head: `<h2>Tool Shop</h2><p class="sub">Tools are always in stock.</p>`, rows: toolRows(state) }),
+    workers: state => ({ head: `<h2>Workers</h2><p class="sub">Each worker comes with a building that takes up one plot. Hiring a second of the same kind costs more.</p>`, rows: workerRows(state) }),
+  };
+
+  const PANELS = {
+    shop(state) {
+      const view = SHOP_VIEWS[ui.shopView](state);
+      const tab = (id, label) => `<button data-action="shopView" data-view="${id}" class="${ui.shopView === id ? "on" : ""}">${label}</button>`;
+      return `<div class="seg">${tab("seeds", "Seeds")}${tab("tools", "Tools")}${tab("workers", "Workers")}</div>
+        <div class="panel-head">${view.head}</div>
+        <ul class="list">${view.rows}</ul>`;
+    },
+
+    sell(state) {
+      const groups = FP.harvestGroups(state);
+      if (groups.length === 0) {
+        return `<div class="panel-head"><h2>Basket</h2></div>
+          <p class="empty">Your basket is empty. Click a ripe plant to harvest it, and it will show up here.</p>`;
+      }
+      const total = groups.reduce((sum, g) => sum + g.total, 0);
+      const rows = groups.map(g => {
+        const rarity = FP.RARITIES[g.seed.rarity];
+        return `<li class="row" style="--rarity:${rarity.color}">
+          <img class="icon" src="${FP.seedIconURL(g.seed)}" alt="">
+          <div class="info">
+            <div class="name">${g.count} ${g.count === 1 ? g.seed.name : g.seed.plural}</div>
+            ${g.mods.length ? `<div class="mods">${g.mods.map(id => modTag(id)).join("")}</div>` : ""}
+            <div class="meta">Worth ${FP.formatCoins(g.total)} coins</div>
+          </div>
+          <button class="btn" data-action="sell" data-key="${g.key}">Sell</button>
+        </li>`;
+      });
+      const stall = FP.upgradeLevel(state, "stall");
+      return `<div class="panel-head"><h2>Basket</h2><p class="sub">${stall ? `Your market stall adds ${stall * 5}% to every sale.` : "Everything you've harvested so far."}</p></div>
+        <div class="card"><button class="btn wide" data-action="sellAll">Sell everything for ${coin}${FP.formatCoins(total)}</button></div>
+        <ul class="list">${rows.join("")}</ul>`;
+    },
+
+    upgrades(state) {
+      const next = FP.nextFarmSize(state);
+      let html = `<div class="panel-head"><h2>Upgrades</h2><p class="sub">Spend coins to grow your farm.</p></div>`;
+      if (next) {
+        const cost = FP.expansionCost(state);
+        html += `<div class="card">
+          <div class="card-title">Bigger Farm</div>
+          <p>Your farm is ${state.cols} by ${state.rows}. Expanding it makes it ${next.cols} by ${next.rows}.</p>
+          <button class="btn btn-gold wide ${state.coins < cost ? "poor" : ""}" data-action="expand">${coin}${FP.formatCoins(cost)}</button>
+        </div>`;
+      } else {
+        html += `<div class="card">
+          <div class="card-title">Bigger Farm</div>
+          <p>Your farm is ${state.cols} by ${state.rows}, which is as big as it gets for now.</p>
+        </div>`;
+      }
+      FP.UPGRADES.forEach(u => {
+        const level = FP.upgradeLevel(state, u.id);
+        const maxed = level >= u.max;
+        const cost = FP.upgradeCost(state, u.id);
+        const pips = Array.from({ length: u.max }, (_, i) => `<i class="${i < level ? "on" : ""}"></i>`).join("");
+        html += `<div class="card">
+          <div class="card-title">${u.name}<span class="level">Level ${level} of ${u.max}</span></div>
+          <div class="pips">${pips}</div>
+          <p>${u.desc}</p>
+          ${maxed
+            ? `<button class="btn wide" disabled>Fully upgraded</button>`
+            : `<button class="btn btn-gold wide ${state.coins < cost ? "poor" : ""}" data-action="upgrade" data-id="${u.id}">${coin}${FP.formatCoins(cost)}</button>`}
+        </div>`;
+      });
+      return html;
+    },
+
+    guide(state) {
+      const now = FP.currentWeather(state);
+      const nowText = now.mod
+        ? `While it lasts, plants can become ${modTag(now.mod)}, which makes their harvests worth ${mult(now.mod)}.`
+        : "Plants grow normally until the weather changes.";
+      const weatherRows = FP.WEATHER.filter(w => w.mod).map(w => `<li class="row slim">
+          <img class="icon small" src="${FP.weatherIconURL(w.id)}" alt="">
+          <div class="info"><div class="name">${w.name}</div><div class="meta">Makes plants ${modTag(w.mod)} ${mult(w.mod)}</div></div>
+        </li>`).join("");
+      const luckyRows = ["golden", "prismatic"].map(id => `<li class="row slim">
+          <div class="info"><div class="name">${modTag(id)} ${mult(id)}</div>
+          <div class="meta">${id === "golden" ? "About 1 in 50 plants grows Golden." : "About 1 in 500 plants grows Prismatic."}</div></div>
+        </li>`).join("");
+      const fusionRows = FP.FUSIONS.map(([a, b, out]) => {
+        const known = state.discovered[out];
+        return `<li class="row slim">
+          <div class="info"><div class="mods">${modTag(a, !state.discovered[a] && FP.MODS[a].kind === "fusion")} and
+            ${modTag(b, !state.discovered[b] && FP.MODS[b].kind === "fusion")} make ${modTag(out, !known)}${known ? " " + mult(out) : ""}</div></div>
+        </li>`;
+      }).join("");
+      const found = FP.FUSIONS.filter(f => state.discovered[f[2]]).length;
+      return `<div class="panel-head"><h2>Guide</h2><p class="sub">How weather changes your plants.</p></div>
+        <div class="card now">
+          <img class="icon small" src="${FP.weatherIconURL(now.id)}" alt="">
+          <div><div class="card-title">Right now: ${now.name}</div><p>${nowText}</p></div>
+        </div>
+        <p class="guide-note">A modifier stays on a plant until you harvest it, and plants that regrow keep theirs. Modifiers multiply together.</p>
+        <h3 class="section">Weather</h3><ul class="list">${weatherRows}</ul>
+        <h3 class="section">Lucky finds</h3><ul class="list">${luckyRows}</ul>
+        <h3 class="section">Worker gifts</h3>
+        <ul class="list">${["aura", "pollinated", "risen"].map(id => `<li class="row slim">
+          <div class="info"><div class="name">${modTag(id)} ${mult(id)}</div>
+          <div class="meta">Given by the ${FP.WORKERS.find(w => w.mod === id).name}.</div></div>
+        </li>`).join("")}</ul>
+        <h3 class="section">Fusions <span class="count-note">${found} of ${FP.FUSIONS.length} found</span></h3>
+        <p class="guide-note">When a plant has both modifiers on the left, they combine into a stronger one.</p>
+        <ul class="list">${fusionRows}</ul>`;
+    },
+
+    options(state) {
+      const s = state.stats;
+      return `<div class="panel-head"><h2>Options</h2></div>
+        <div class="card">
+          <div class="card-title">Saving</div>
+          <p>The game saves by itself every 15 seconds and when you close the tab.</p>
+          <button class="btn wide" data-action="save">Save now</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Farm stats</div>
+          <dl class="stats">
+            <dt>Seeds planted</dt><dd>${FP.formatCoins(s.planted)}</dd>
+            <dt>Crops harvested</dt><dd>${FP.formatCoins(s.harvested)}</dd>
+            <dt>Coins earned</dt><dd>${FP.formatCoins(s.earned)}</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <div class="card-title">Start over</div>
+          <p>This erases your farm, your coins, and your seeds.</p>
+          <button class="btn btn-red wide" data-action="reset">Reset farm</button>
+        </div>
+        <p class="version">Fancy Plants v0.4</p>`;
+    },
+  };
+
+  // ---------- Building popup ----------
+
+  ui.openBuilding = function (uid) {
+    ui.selected = uid;
+    ui.renderPopup();
+  };
+
+  ui.closeBuilding = function () {
+    ui.selected = null;
+    ui.els.popup.hidden = true;
+  };
+
+  ui.renderPopup = function () {
+    const state = ui.game.state;
+    const b = state.buildings.find(other => other.uid === ui.selected);
+    if (!b) return ui.closeBuilding();
+    const def = FP.WORKER_BY_ID[b.workerId];
+    const maxed = b.level >= FP.WORKER_MAX_LEVEL;
+    const cost = FP.buildingUpgradeCost(b);
+    const pop = ui.els.popup;
+    pop.style.setProperty("--rarity", FP.RARITIES[def.rarity].color);
+    pop.innerHTML = `<div class="popup-head"><b>${def.building}</b><span>Level ${b.level} of ${FP.WORKER_MAX_LEVEL}</span></div>
+      <p>${def.desc}</p>
+      <p class="meta">${workerStats(def, b.level)}</p>
+      ${maxed ? "" : `<p class="meta next">At level ${b.level + 1}: ${workerStats(def, b.level + 1)}</p>`}
+      <div class="popup-actions">
+        ${maxed
+          ? `<button class="btn" disabled>Fully upgraded</button>`
+          : `<button class="btn btn-gold ${state.coins < cost ? "poor" : ""}" data-action="upgradeBuilding" data-uid="${b.uid}">Upgrade ${coin}${FP.formatCoins(cost)}</button>`}
+        <button class="btn btn-plain" data-action="pickUp" data-uid="${b.uid}">Pick up</button>
+      </div>`;
+    pop.hidden = false;
+    // Sit next to the building, on whichever side has room.
+    const r = FP.plotRect(FP.layout(state), b.x, b.y);
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    let x = r.x + r.s + 12;
+    if (x + w > 900) x = r.x - w - 12;
+    const y = FP.clamp(r.y - 10, 72, 625 - h);
+    pop.style.transform = `translate(${x}px, ${y}px)`;
+  };
+
+  ui.renderPanel = function () {
+    const scroll = ui.els.panel.scrollTop;
+    ui.els.panel.innerHTML = PANELS[ui.tab](ui.game.state);
+    ui.els.panel.scrollTop = scroll;
+  };
+
+  // ---------- Every frame ----------
+
+  ui.tick = function (now, dt) {
+    const state = ui.game.state;
+
+    // Count the coin display toward the real number.
+    if (ui.shownCoins !== state.coins && now >= ui.holdCoinsUntil) {
+      const diff = state.coins - ui.shownCoins;
+      ui.shownCoins = Math.abs(diff) < 1 ? state.coins : ui.shownCoins + diff * Math.min(1, dt * 10);
+      ui.els.coinCount.textContent = FP.formatCoins(Math.round(ui.shownCoins));
+    }
+
+    if (ui.tab === "shop") {
+      const timer = document.getElementById("shop-timer");
+      if (timer) {
+        const text = FP.formatClock(state.shop.nextRefresh - now);
+        if (timer.textContent !== text) timer.textContent = text;
+      }
+    }
+
+    const weather = FP.currentWeather(state);
+    if (weather.id !== ui.lastWeather) {
+      ui.lastWeather = weather.id;
+      ui.els.weatherIcon.src = FP.weatherIconURL(weather.id);
+      ui.els.weatherName.textContent = weather.name;
+      ui.els.weather.title = weather.mod ? "Plants may become " + FP.MODS[weather.mod].name + ". Click for the guide." : "Click for the guide.";
+      ui.refreshTab("guide");
+    }
+    const left = FP.formatClock(state.weather.endsAt - now);
+    const timeText = weather.mod ? "Ends in " + left : "Changes in " + left;
+    if (ui.els.weatherTime.textContent !== timeText) ui.els.weatherTime.textContent = timeText;
+
+    if (state.harvest.length !== ui.lastBasket) {
+      ui.lastBasket = state.harvest.length;
+      ui.els.basketCount.hidden = ui.lastBasket === 0;
+      ui.els.basketCount.textContent = ui.lastBasket > 99 ? "99+" : ui.lastBasket;
+    }
+
+    const ripe = FP.ripeCells(state, now).length;
+    if (ripe !== ui.lastRipe) {
+      ui.lastRipe = ripe;
+      ui.els.harvestAll.textContent = ripe > 0 ? "Harvest all (" + ripe + ")" : "Harvest all";
+      ui.els.harvestAll.disabled = ripe === 0;
+    }
+  };
+
+  function replay(el, cls) {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth; // restart the animation
+    el.classList.add(cls);
+  }
+
+  ui.bumpCoins = () => replay(ui.els.coins, "bump");
+  ui.pulseTab = tab => replay(ui.els.tabs.querySelector(`[data-tab="${tab}"]`), "pulse");
+  ui.pulseWeather = () => replay(ui.els.weather, "bump");
+  ui.slotFor = (type, id) => ui.els.slots.querySelector(`.slot[data-type="${type}"][data-id="${id}"]`);
+  ui.pulseSlot = (type, id) => replay(ui.slotFor(type, id), "pulse");
+  ui.coinTarget = () => FP.renderer.centerOf(ui.els.coins.querySelector(".coin-icon"));
+
+  ui.toast = function (message, special) {
+    const el = document.createElement("div");
+    el.className = "toast" + (special ? " special" : "");
+    el.textContent = message;
+    ui.els.toasts.appendChild(el);
+    while (ui.els.toasts.children.length > 3) ui.els.toasts.firstChild.remove();
+    setTimeout(() => {
+      el.classList.add("out");
+      setTimeout(() => el.remove(), 400);
+    }, special ? 4200 : 2800);
+  };
+})(window.FP);

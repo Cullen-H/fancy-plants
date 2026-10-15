@@ -31,6 +31,7 @@
       weatherName: $("#weather-name"),
       weatherTime: $("#weather-time"),
       popup: $("#popup"),
+      goalCount: $("#goal-count"),
     };
     ui.shownCoins = game.state.coins;
     ui.els.coinCount.textContent = FP.formatCoins(ui.shownCoins);
@@ -61,6 +62,20 @@
     }, { passive: false });
     ui.els.harvestAll.addEventListener("click", () => game.action("harvestAll", {}));
     ui.els.weather.addEventListener("click", () => ui.setTab("guide"));
+    $("#options-btn").addEventListener("click", () => ui.setTab(ui.tab === "options" ? "shop" : "options"));
+    // Sliders and switches in the options change settings right away.
+    ui.els.panel.addEventListener("input", e => {
+      if (e.target.dataset.setting === "volume") {
+        FP.setVolume(Number(e.target.value) / 100);
+        FP.sfx("click");
+      }
+    });
+    ui.els.panel.addEventListener("change", e => {
+      if (e.target.dataset.setting === "calm") {
+        FP.settings.calm = e.target.checked;
+        FP.saveSettings();
+      }
+    });
     ui.els.popup.addEventListener("click", e => {
       const b = e.target.closest("[data-action]");
       if (b && !b.disabled) game.action(b.dataset.action, b.dataset, b);
@@ -77,6 +92,7 @@
   ui.setTab = function (tab) {
     ui.tab = tab;
     [...ui.els.tabs.children].forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    $("#options-btn").classList.toggle("active", tab === "options");
     ui.renderPanel();
     ui.els.panel.scrollTop = 0;
   };
@@ -347,7 +363,7 @@
           <img class="icon small" src="${FP.weatherIconURL(now.id)}" alt="">
           <div><div class="card-title">Right now: ${now.name}</div><p>${nowText}</p></div>
         </div>
-        <p class="guide-note">A modifier stays on a plant until you harvest it, and plants that regrow keep theirs. Modifiers multiply together.</p>
+        <p class="guide-note">A modifier stays on a plant until you harvest it. Plants that regrow start each new crop without modifiers. Modifiers multiply together.</p>
         <h3 class="section">Weather</h3><ul class="list">${weatherRows}</ul>
         <h3 class="section">Lucky finds</h3><ul class="list">${luckyRows}</ul>
         <h3 class="section">Worker gifts</h3>
@@ -360,9 +376,49 @@
         <ul class="list">${fusionRows}</ul>`;
     },
 
+    goals(state) {
+      const row = g => {
+        const progress = FP.goalProgress(state, g);
+        const claimed = state.goalsClaimed[g.id];
+        const ready = !claimed && progress >= g.target;
+        const showCount = g.target > 1;
+        return `<li class="goal ${claimed ? "claimed" : ""} ${ready ? "ready" : ""}">
+          <div class="goal-text">${g.text}</div>
+          ${claimed ? "" : `<div class="bar"><i style="width:${progress / g.target * 100}%"></i></div>`}
+          <div class="goal-foot">
+            <span class="reward">${claimed ? "Claimed" : "Reward: " + FP.rewardText(g.reward)}</span>
+            ${ready ? `<button class="btn btn-gold" data-action="claim" data-id="${g.id}">Claim</button>`
+              : (!claimed && showCount ? `<span class="goal-count">${FP.formatCoins(progress)} of ${FP.formatCoins(g.target)}</span>` : "")}
+          </div>
+        </li>`;
+      };
+      const open = FP.GOALS.filter(g => !state.goalsClaimed[g.id]);
+      const ready = open.filter(g => FP.goalDone(state, g));
+      const waiting = open.filter(g => !FP.goalDone(state, g));
+      const done = FP.GOALS.filter(g => state.goalsClaimed[g.id]);
+      return `<div class="panel-head"><h2>Goals</h2><p class="sub">${done.length} of ${FP.GOALS.length} done. Finish goals to earn rewards.</p></div>
+        <ul class="goals">${[...ready, ...waiting].map(row).join("")}</ul>
+        ${done.length ? `<h3 class="section">Done</h3><ul class="goals">${done.map(row).join("")}</ul>` : ""}`;
+    },
+
     options(state) {
       const s = state.stats;
       return `<div class="panel-head"><h2>Options</h2></div>
+        <div class="card">
+          <div class="card-title">Sound</div>
+          <label class="setting">Volume
+            <input type="range" min="0" max="100" value="${Math.round(FP.settings.volume * 100)}" data-setting="volume">
+          </label>
+          <label class="setting check">
+            <input type="checkbox" data-setting="calm" ${FP.settings.calm ? "checked" : ""}>
+            Fewer effects, with less sparkle and no butterflies or clouds
+          </label>
+        </div>
+        <div class="card">
+          <div class="card-title">Tutorial</div>
+          <p>Shows the first time tips again from the start.</p>
+          <button class="btn wide" data-action="tutorial">Show the tutorial</button>
+        </div>
         <div class="card">
           <div class="card-title">Saving</div>
           <p>The game saves by itself every 15 seconds and when you close the tab.</p>
@@ -374,6 +430,8 @@
             <dt>Seeds planted</dt><dd>${FP.formatCoins(s.planted)}</dd>
             <dt>Crops harvested</dt><dd>${FP.formatCoins(s.harvested)}</dd>
             <dt>Coins earned</dt><dd>${FP.formatCoins(s.earned)}</dd>
+            <dt>Best single sale</dt><dd>${FP.formatCoins(s.best)}</dd>
+            <dt>Workers hired</dt><dd>${FP.formatCoins(s.hired)}</dd>
           </dl>
         </div>
         <div class="card">
@@ -381,7 +439,7 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.4</p>`;
+        <p class="version">Fancy Plants v0.5</p>`;
     },
   };
 
@@ -463,6 +521,13 @@
     const left = FP.formatClock(state.weather.endsAt - now);
     const timeText = weather.mod ? "Ends in " + left : "Changes in " + left;
     if (ui.els.weatherTime.textContent !== timeText) ui.els.weatherTime.textContent = timeText;
+
+    const claimable = FP.claimableGoals(state).length;
+    if (claimable !== ui.lastGoals) {
+      ui.lastGoals = claimable;
+      ui.els.goalCount.hidden = claimable === 0;
+      ui.els.goalCount.textContent = claimable;
+    }
 
     if (state.harvest.length !== ui.lastBasket) {
       ui.lastBasket = state.harvest.length;

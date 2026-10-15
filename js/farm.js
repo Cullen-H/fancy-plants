@@ -45,8 +45,10 @@
     const item = { seedId: seed.id, value: Math.round(seed.value * FP.modMultiplier(plant.mods)), mods: plant.mods.slice() };
     state.harvest.push(item);
     state.stats.harvested++;
+    state.stats.byRarity[seed.rarity]++;
     if (seed.regrow > 0) {
-      // Plants that regrow keep their modifiers, so a well decorated plant keeps paying off.
+      // The modifiers leave with the harvest, so each new crop starts plain.
+      plant.mods = [];
       plant.plantedAt = now;
       plant.growMs = seed.regrow * 1000 * FP.growthFactor(state);
       plant.harvests++;
@@ -79,7 +81,9 @@
     state.harvest = state.harvest.filter(item => {
       if (seedId && item.seedId !== seedId) return true;
       count++;
-      coins += FP.sellPrice(state, item);
+      const price = FP.sellPrice(state, item);
+      coins += price;
+      state.stats.best = Math.max(state.stats.best, price);
       return false;
     });
     state.coins += coins;
@@ -109,7 +113,9 @@
     state.harvest = state.harvest.filter(item => {
       if (groupKey(item) !== key) return true;
       count++;
-      coins += FP.sellPrice(state, item);
+      const price = FP.sellPrice(state, item);
+      coins += price;
+      state.stats.best = Math.max(state.stats.best, price);
       return false;
     });
     state.coins += coins;
@@ -231,6 +237,7 @@
   FP.addMod = function (state, plant, modId) {
     if (plant.mods.includes(modId)) return null;
     plant.mods.push(modId);
+    state.stats.modsGained++;
     const fused = resolveFusions(plant);
     const newFinds = [modId, ...fused].filter(id => !state.discovered[id]);
     newFinds.forEach(id => { state.discovered[id] = true; });

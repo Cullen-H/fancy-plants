@@ -50,7 +50,9 @@ Phase 3 is done. Nine kinds of weather take turns with clear skies, and each one
 
 Phase 4 is done. There are five workers, and each one lives in a building on its own plot. The Waterer walks over and waters plants, and the Picker harvests ripe ones into the basket. The Aura Cultivator and the Shadow Gardener send out pulses that grow nearby plants and can leave Aura or Risen on them. The Beekeeper's bees fly out to plants, and their visits can leave plants Pollinated. Aura and Risen fuse into Monarch. Buildings level up to 3, and a building that gets picked up keeps its level. Workers only work while the game is open. Phones held sideways can play, and phones held upright are asked to turn.
 
-**Balance note for Phase 5:** Plants that regrow keep their modifiers forever. A Supernova Moonflower would earn about 19 million coins every harvest, so this needs a cap or a decay once the economy gets tuned.
+Phase 5 is done. Plants that regrow now lose their modifiers with each harvest, so every crop starts plain. Weather is a little more likely to change plants, and when a weather ends a message says how many plants it changed. Blueberry got cheaper, Pumpkin sells for more, and Golden Spray costs less now that it only boosts one harvest. There are 20 goals with rewards in a new Goals tab, and the game says when one is ready to claim.
+
+Phase 6 is mostly done. Sound effects are made in code, so there are no audio files to load. Options moved behind a gear button and has a volume slider and a setting for fewer effects. New players get a six step tutorial that they can skip or replay. The store page description is still to do, and you will write that one.
 
 ## Later phases
 

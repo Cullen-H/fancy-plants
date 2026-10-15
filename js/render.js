@@ -45,6 +45,7 @@
   };
 
   fx.burst = function (x, y, color, count, power = 1) {
+    if (FP.settings.calm) count = Math.ceil(count / 4); // fewer effects keeps just a hint of each burst
     for (let i = 0; i < count; i++) {
       const a = Math.random() * TAU, speed = (80 + Math.random() * 140) * power;
       fx.items.push({
@@ -1160,7 +1161,7 @@
           drawPlantAt(ctx, plant, r, now, t, x * 7.3 + y * 3.1, popAt);
           ctx.globalAlpha = 1;
           // Plants with modifiers give off a little sparkle in their colors now and then.
-          if (plant.mods.length && Math.random() < dt * 0.8) {
+          if (plant.mods.length && !FP.settings.calm && Math.random() < dt * 0.8) {
             const id = plant.mods[Math.floor(Math.random() * plant.mods.length)];
             fx.burst(r.x + r.s * (0.3 + Math.random() * 0.4), r.y + r.s * (0.3 + Math.random() * 0.3), modColor(id, t), 1, 0.25);
           }
@@ -1183,11 +1184,11 @@
     drawWalkers(ctx, state, L, t);
     drawFlights(ctx, dt, t);
 
-    drawClouds(ctx, t);
+    if (!FP.settings.calm) drawClouds(ctx, t);
     updateSky(state, dt);
     // Butterflies stay out of rain, snow, and the dark.
     ctx.globalAlpha = FP.ROUGH_WEATHER[sky.id] ? 1 - sky.alpha : 1;
-    if (ctx.globalAlpha > 0.01) drawButterflies(ctx, t);
+    if (ctx.globalAlpha > 0.01 && !FP.settings.calm) drawButterflies(ctx, t);
     ctx.globalAlpha = 1;
     FP.drawWeather(ctx, sky.id, t, sky.alpha);
 

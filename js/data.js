@@ -18,8 +18,8 @@
     { id: "potato",       name: "Potato",       plural: "Potatoes",      rarity: 0, price: 60,    value: 15,    grow: 35,  regrow: 25,  shape: "bush",    color: "#c99a5b", fruit: "tuber" },
     { id: "tomato",       name: "Tomato",       plural: "Tomatoes",      rarity: 1, price: 150,   value: 40,    grow: 45,  regrow: 35,  shape: "bush",    color: "#e8412c", fruit: "round" },
     { id: "strawberry",   name: "Strawberry",   plural: "Strawberries",  rarity: 1, price: 220,   value: 55,    grow: 50,  regrow: 40,  shape: "bush",    color: "#e63950", fruit: "strawberry" },
-    { id: "blueberry",    name: "Blueberry",    plural: "Blueberries",   rarity: 1, price: 260,   value: 32,    grow: 35,  regrow: 25,  shape: "bush",    color: "#4a5bd4", fruit: "berry" },
-    { id: "pumpkin",      name: "Pumpkin",      plural: "Pumpkins",      rarity: 2, price: 900,   value: 1300,  grow: 120, regrow: 0,   shape: "pumpkin", color: "#f07f1a" },
+    { id: "blueberry",    name: "Blueberry",    plural: "Blueberries",   rarity: 1, price: 190,   value: 32,    grow: 35,  regrow: 25,  shape: "bush",    color: "#4a5bd4", fruit: "berry" },
+    { id: "pumpkin",      name: "Pumpkin",      plural: "Pumpkins",      rarity: 2, price: 900,   value: 1500,  grow: 120, regrow: 0,   shape: "pumpkin", color: "#f07f1a" },
     { id: "corn",         name: "Corn",         plural: "Corn",          rarity: 2, price: 1200,  value: 230,   grow: 90,  regrow: 60,  shape: "stalk",   color: "#f5d33b" },
     { id: "starfruit",    name: "Starfruit",    plural: "Starfruit",     rarity: 3, price: 4500,  value: 850,   grow: 150, regrow: 100, shape: "tree",    color: "#f9d923", fruit: "star" },
     { id: "golden_apple", name: "Golden Apple", plural: "Golden Apples", rarity: 3, price: 7000,  value: 10500, grow: 240, regrow: 0,   shape: "tree",    color: "#f2c230", fruit: "apple" },
@@ -81,22 +81,22 @@
   // weight decides how often each weather is picked. Clear weather comes between every other kind.
   FP.WEATHER = [
     { id: "clear",     name: "Clear Skies",   mod: null,        weight: 0,  start: "The weather cleared up." },
-    { id: "rain",      name: "Rain",          mod: "wet",       weight: 30, start: "It started to rain." },
-    { id: "sunny",     name: "Sunny",         mod: "heated",    weight: 25, start: "The sun is beating down on the farm." },
-    { id: "snow",      name: "Snow",          mod: "chilled",   weight: 15, start: "Snow is falling." },
-    { id: "moonlight", name: "Moonlight",     mod: "moonlit",   weight: 14, start: "The moon came out." },
-    { id: "hail",      name: "Hail",          mod: "icy",       weight: 10, start: "Hail is coming down." },
-    { id: "thunder",   name: "Thunderstorm",  mod: "shocked",   weight: 6,  start: "A thunderstorm rolled in." },
-    { id: "rainbow",   name: "Rainbow",       mod: "lucky",     weight: 5,  start: "A rainbow appeared over the farm." },
-    { id: "bloodmoon", name: "Blood Moon",    mod: "blood",     weight: 4,  start: "The moon turned red." },
-    { id: "meteors",   name: "Meteor Shower", mod: "celestial", weight: 2,  start: "Meteors are streaking across the sky." },
+    { id: "rain",      name: "Rain",          mod: "wet",       weight: 30, noun: "rain", start: "It started to rain." },
+    { id: "sunny",     name: "Sunny",         mod: "heated",    weight: 25, noun: "sunny spell", start: "The sun is beating down on the farm." },
+    { id: "snow",      name: "Snow",          mod: "chilled",   weight: 15, noun: "snow", start: "Snow is falling." },
+    { id: "moonlight", name: "Moonlight",     mod: "moonlit",   weight: 14, noun: "moonlight", start: "The moon came out." },
+    { id: "hail",      name: "Hail",          mod: "icy",       weight: 10, noun: "hail", start: "Hail is coming down." },
+    { id: "thunder",   name: "Thunderstorm",  mod: "shocked",   weight: 6,  noun: "thunderstorm", start: "A thunderstorm rolled in." },
+    { id: "rainbow",   name: "Rainbow",       mod: "lucky",     weight: 5,  noun: "rainbow", start: "A rainbow appeared over the farm." },
+    { id: "bloodmoon", name: "Blood Moon",    mod: "blood",     weight: 4,  noun: "blood moon", start: "The moon turned red." },
+    { id: "meteors",   name: "Meteor Shower", mod: "celestial", weight: 2,  noun: "meteor shower", start: "Meteors are streaking across the sky." },
   ];
   FP.WEATHER_BY_ID = {};
   FP.WEATHER.forEach(w => { FP.WEATHER_BY_ID[w.id] = w; });
 
   FP.WEATHER_TIMES = { clear: [90, 180], active: [100, 160], firstClear: 45 }; // seconds
   FP.WEATHER_TICK_MS = 5000;   // how often weather tries to change plants
-  FP.WEATHER_CHANCE = 0.04;    // chance per plant per tick
+  FP.WEATHER_CHANCE = 0.06;    // chance per plant per tick
 
   // ---------- Tools ----------
   // grow is the share of a plant's grow time that the tool skips.
@@ -109,8 +109,8 @@
       desc: "Lifts a plant out gently so you can move it to another plot." },
     { id: "jar",        name: "Storm in a Jar", rarity: 2, price: 6000,  uses: 1,
       desc: "Gives a plant the current weather's modifier right away." },
-    { id: "spray",      name: "Golden Spray",   rarity: 3, price: 40000, uses: 1,
-      desc: "Coats a plant in gold, so its harvests are worth ten times more." },
+    { id: "spray",      name: "Golden Spray",   rarity: 3, price: 25000, uses: 1,
+      desc: "Coats a plant in gold, so its next harvest is worth ten times more." },
   ];
   FP.TOOL_BY_ID = {};
   FP.TOOLS.forEach(tool => { FP.TOOL_BY_ID[tool.id] = tool; });

@@ -1,7 +1,9 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 3;
+  const SAVE_VERSION = 4;
+
+  const newStats = () => ({ planted: 0, harvested: 0, earned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
   FP.newState = function () {
     return {
@@ -19,7 +21,9 @@
       discovered: {},                                   // modifier ids the player has seen
       buildings: [],                                    // placed worker buildings { uid, workerId, x, y, level, lastWork }
       workerBag: [],                                    // bought or picked up buildings { workerId, level }
-      stats: { planted: 0, harvested: 0, earned: 0 },
+      stats: newStats(),
+      goalsClaimed: {},                                 // goal id to true
+      tutorial: 0,                                      // step of the first time tutorial, or -1 when done
     };
   };
 
@@ -53,6 +57,7 @@
 
   // Each save format change gets a step here that upgrades the old data.
   // Version 2 added modifiers, tools, upgrades, and weather. Version 3 added workers.
+  // Version 4 added goals, more stats, and the tutorial.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
@@ -124,7 +129,16 @@
       .map(w => ({ workerId: w.workerId, level: level(w.level) }));
 
     const st = d.stats || {};
-    s.stats = { planted: num(st.planted, 0), harvested: num(st.harvested, 0), earned: num(st.earned, 0) };
+    for (const key in s.stats) {
+      if (key === "byRarity") s.stats.byRarity = s.stats.byRarity.map((n, i) => num(st.byRarity && st.byRarity[i], 0));
+      else s.stats[key] = num(st[key], 0);
+    }
+    // Older saves didn't count hires, so count the buildings they already have.
+    if (!st.hired) s.stats.hired = s.buildings.length + s.workerBag.length;
+    s.goalsClaimed = {};
+    for (const id in d.goalsClaimed || {}) s.goalsClaimed[id] = true;
+    // Saves from before the tutorial existed skip it.
+    s.tutorial = Math.round(num(d.tutorial, -1));
     s.savedAt = num(d.savedAt, 0);
     return s;
   }

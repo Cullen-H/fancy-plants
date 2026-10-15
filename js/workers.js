@@ -48,6 +48,7 @@
     const price = FP.workerPrice(state, id);
     if (state.coins < price) return "You need " + FP.formatCoins(price - state.coins) + " more coins to hire them.";
     state.coins -= price;
+    state.stats.hired++;
     state.workerBag.push({ workerId: id, level: 1 });
     return null;
   };

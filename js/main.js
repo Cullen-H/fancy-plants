@@ -10,6 +10,11 @@
   const view = { hover: null, mouse: null, tool: null, pendingDig: null, carrying: null };
   const ui = FP.ui;
   const toast = (msg, special) => ui.toast(msg, special);
+  const fail = msg => {
+    FP.sfx("error");
+    toast(msg);
+  };
+  const tutorial = FP.tutorial;
 
   const game = FP.game = {
     get state() { return state; },
@@ -41,7 +46,10 @@
         from: { x: from.x + (Math.random() - 0.5) * 60, y: from.y + (Math.random() - 0.5) * 16 },
         to, delay: i * 0.045, dur: 0.55, lift: 60 + Math.random() * 60,
         draw: FP.drawCoin, size: 1.1, endSize: 0.8,
-        onArrive: ui.bumpCoins,
+        onArrive: () => {
+          ui.bumpCoins();
+          FP.sfx("coin");
+        },
       });
     }
   }
@@ -61,10 +69,12 @@
     buy(d, el) {
       const slot = state.shop.stock[Number(d.index)];
       const err = FP.buySeed(state, Number(d.index));
-      if (err) return toast(err);
+      if (err) return fail(err);
       const seed = FP.SEED_BY_ID[slot.seedId];
       const from = el && FP.renderer.centerOf(el); // measured now, because the menu is about to redraw
       toast("You bought " + FP.withArticle(seed.name) + " seed.");
+      FP.sfx("buy");
+      tutorial.on("buySeed");
       if (!ui.tool) ui.tool = { type: "seed", seedId: seed.id };
       coinsChanged();
       ui.renderHotbar();
@@ -74,9 +84,10 @@
     buyTool(d, el) {
       const tool = FP.TOOL_BY_ID[d.id];
       const err = FP.buyTool(state, d.id);
-      if (err) return toast(err);
+      if (err) return fail(err);
       const from = el && FP.renderer.centerOf(el);
       toast("You bought " + FP.withArticle(tool.name) + ".");
+      FP.sfx("buy");
       coinsChanged();
       ui.renderHotbar();
       const img = new Image();
@@ -87,8 +98,9 @@
     hire(d, el) {
       const def = FP.WORKER_BY_ID[d.id];
       const err = FP.buyWorker(state, d.id);
-      if (err) return toast(err);
+      if (err) return fail(err);
       const from = el && FP.renderer.centerOf(el);
+      FP.sfx("buy");
       toast("You hired " + FP.withArticle(def.name) + ". Place their " + def.building + " on an empty plot.");
       ui.tool = { type: "building", workerId: def.id };
       coinsChanged();
@@ -102,10 +114,11 @@
       const b = state.buildings.find(other => other.uid === d.uid);
       if (!b) return;
       const err = FP.upgradeBuilding(state, b);
-      if (err) return toast(err);
+      if (err) return fail(err);
       const r = FP.plotRect(FP.layout(state), b.x, b.y);
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, "#ffd23f", 16, 0.9);
       toast("The " + FP.WORKER_BY_ID[b.workerId].building + " is now level " + b.level + ".");
+      FP.sfx("goal");
       coinsChanged();
     },
 
@@ -121,8 +134,9 @@
     upgrade(d) {
       const u = FP.UPGRADE_BY_ID[d.id];
       const err = FP.buyUpgrade(state, d.id);
-      if (err) return toast(err);
+      if (err) return fail(err);
       toast(u.name + " is now level " + FP.upgradeLevel(state, d.id) + ".");
+      FP.sfx("buy");
       coinsChanged();
     },
 
@@ -131,6 +145,7 @@
       if (!group) return;
       const res = FP.sellGroup(state, d.key);
       flyCoins(el, res.count);
+      tutorial.on("sell");
       toast("You sold " + FP.countOf(group.seed, res.count) + " for " + FP.formatCoins(res.coins) + " coins.");
       coinsChanged();
     },
@@ -139,24 +154,45 @@
       const res = FP.sellHarvest(state, null);
       if (!res.count) return;
       flyCoins(el, res.count);
+      tutorial.on("sell");
       toast("You sold everything for " + FP.formatCoins(res.coins) + " coins.");
       coinsChanged();
     },
 
     expand() {
       const err = FP.expand(state);
-      if (err) return toast(err);
+      if (err) return fail(err);
       toast("Your farm is now " + state.cols + " by " + state.rows + ".");
+      FP.sfx("goal");
       coinsChanged();
     },
 
     harvestAll() {
       const now = Date.now();
       const cells = FP.ripeCells(state, now);
-      if (cells.length === 0) return toast("Nothing is ready to harvest yet.");
+      if (cells.length === 0) return fail("Nothing is ready to harvest yet.");
       cells.forEach((c, i) => harvestAt(c.x, c.y, now, i * 0.05, true));
       toast("You harvested " + cells.length + (cells.length === 1 ? " plant." : " plants."));
+      tutorial.on("harvest");
       ui.refreshTab("sell");
+    },
+
+    claim(d, el) {
+      const g = FP.GOAL_BY_ID[d.id];
+      const from = el && FP.renderer.centerOf(el);
+      const err = FP.claimGoal(state, d.id);
+      if (err) return fail(err);
+      FP.sfx("goal");
+      toast("Goal reward: " + FP.rewardText(g.reward) + ".", true);
+      if (g.reward.coins) flyCoins(el && el.isConnected ? el : null, 10);
+      if (from) FP.fx.burst(from.x, from.y, "#ffd23f", 18, 0.9);
+      coinsChanged();
+      ui.renderHotbar();
+    },
+
+    tutorial() {
+      tutorial.restart();
+      toast("The tutorial will walk you through the basics again.");
     },
 
     save() {
@@ -175,10 +211,12 @@
       ui.closeBuilding();
       ui.tool = null;
       view.carrying = null;
+      lastClaimable = 0;
       ui.shownCoins = state.coins;
       ui.els.coinCount.textContent = FP.formatCoins(state.coins);
       ui.refresh();
       FP.save(state);
+      tutorial.render();
       toast("You have a brand new farm.");
     },
   };
@@ -189,6 +227,7 @@
   function harvestAt(x, y, now, delay = 0, quiet = false) {
     const item = FP.harvestPlot(state, x, y, now);
     if (!item) return false;
+    FP.sfx("harvest");
     const seed = FP.SEED_BY_ID[item.seedId];
     const r = FP.plotRect(FP.layout(state), x, y);
     FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.5, seed.color, 10);
@@ -216,7 +255,7 @@
       if (isDrag) return;
       const def = FP.WORKER_BY_ID[tool.workerId];
       const err = FP.placeBuilding(state, tool.workerId, x, y, now);
-      if (err) return toast(err);
+      if (err) return fail(err);
       const r = FP.plotRect(FP.layout(state), x, y);
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.7, "#c9a26b", 14, 0.8);
       toast("The " + def.name + " moved into the " + def.building + ".");
@@ -246,18 +285,23 @@
     }
 
     if (plant) {
-      if (harvestAt(x, y, now)) ui.refreshTab("sell");
+      if (harvestAt(x, y, now)) {
+        ui.refreshTab("sell");
+        tutorial.on("harvest");
+      }
       return;
     }
 
     if (tool && tool.type === "seed") {
       const err = FP.plantSeed(state, x, y, tool.seedId, now);
       if (err) {
-        if (!isDrag) toast(err);
+        if (!isDrag) fail(err);
         return;
       }
       const r = FP.plotRect(FP.layout(state), x, y);
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 6);
+      FP.sfx("plant");
+      tutorial.on("plant");
       if (!state.seeds[tool.seedId]) {
         ui.tool = null;
         toast("That was your last " + FP.SEED_BY_ID[tool.seedId].name + " seed.");
@@ -293,7 +337,7 @@
       }
       const moving = state.plots[from.y][from.x];
       const err = FP.movePlant(state, from, { x, y });
-      if (err) return toast(err);
+      if (err) return fail(err);
       view.carrying = null;
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 8);
       toast("You moved the " + FP.SEED_BY_ID[moving.seedId].name + ".");
@@ -305,7 +349,7 @@
     if (isDrag && !def.grow) return;
     const res = FP.useTool(state, id, x, y, now);
     if (res.error) {
-      if (!isDrag) toast(res.error);
+      if (!isDrag) fail(res.error);
       return;
     }
     if (def.grow) {
@@ -332,6 +376,7 @@
     const seed = FP.SEED_BY_ID[plant.seedId];
     const t = Date.now() / 1000;
     FP.fx.burst(cx, cy, FP.modColor(modId, t), 10, 0.7);
+    FP.sfx(result.fused.length ? "fusion" : "mod");
     if (result.fused.length) {
       const top = result.fused[result.fused.length - 1];
       FP.fx.burst(cx, cy, FP.modColor(top, t), 22, 1.1);
@@ -354,6 +399,7 @@
     const p = view.pendingDig;
     if (p && p.x === x && p.y === y && now < p.until) {
       FP.digUp(state, x, y);
+      FP.sfx("dig");
       view.pendingDig = null;
       const r = FP.plotRect(FP.layout(state), x, y);
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 10);
@@ -476,18 +522,44 @@
   let last = performance.now();
   let nextCheck = 0;
   let nextWeatherTick = 0;
+  let weatherChanged = 0; // plants the current weather has changed, for the message when it ends
 
   function updateWeather(now) {
     if (now >= state.weather.endsAt) {
+      const ending = FP.currentWeather(state);
+      if (ending.mod) {
+        const mod = FP.MODS[ending.mod].name;
+        toast(weatherChanged === 0
+          ? "The " + ending.noun + " ended without changing any plants."
+          : "The " + ending.noun + " left " + (weatherChanged === 1 ? "1 plant " : weatherChanged + " plants ") + mod + ".");
+      }
+      weatherChanged = 0;
       const next = FP.nextWeather(state, now);
       toast(next.start);
+      FP.sfx("weather");
       ui.pulseWeather();
       ui.refreshTab("guide");
     }
     if (now >= nextWeatherTick) {
       nextWeatherTick = now + FP.WEATHER_TICK_MS;
-      FP.weatherTick(state, celebrateMod);
+      FP.weatherTick(state, (x, y, plant, modId, result) => {
+        weatherChanged++;
+        celebrateMod(x, y, plant, modId, result);
+      });
     }
+  }
+
+  // Lets the player know when a goal is ready to claim.
+  let lastClaimable = -1;
+  function checkGoals() {
+    const ready = FP.claimableGoals(state);
+    if (lastClaimable >= 0 && ready.length > lastClaimable) {
+      toast("Goal finished: " + ready[ready.length - 1].text + ". Claim it in the Goals tab.", true);
+      FP.sfx("goal");
+      ui.pulseTab("goals");
+      ui.refreshTab("goals");
+    }
+    lastClaimable = ready.length;
   }
 
   // Plays what a worker did once they or their bee get to the plot.
@@ -558,6 +630,8 @@
     }
 
     updateWeather(now);
+    tutorial.tick(now);
+    checkGoals();
     FP.runWorkers(state, now, onWorkerEvent);
     announceLucky();
     if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
@@ -583,11 +657,12 @@
   if (startNow >= state.weather.endsAt) FP.nextWeather(state, startNow);
   nextWeatherTick = startNow + FP.WEATHER_TICK_MS;
   ui.init(game);
+  tutorial.init(game);
 
   if (firstVisit) {
     ui.tool = { type: "seed", seedId: "carrot" };
     ui.renderHotbar();
-    toast("Welcome to your farm. Click a plot to plant your first carrot.");
+    toast("Welcome to Fancy Plants.");
   } else {
     const ripe = FP.ripeCells(state, startNow).length;
     toast(ripe > 0

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=0.4.2">
+  <link rel="stylesheet" href="css/style.css?v=0.5">
 </head>
 <body>
   <div id="stage">
@@ -19,8 +19,13 @@
         <img alt="">
         <span class="weather-text"><b id="weather-name"></b><span id="weather-time"></span></span>
       </button>
-      <div id="coins" class="coins" title="Coins">
-        <span class="coin-icon"></span><span id="coin-count">0</span>
+      <div class="top-right">
+        <div id="coins" class="coins" title="Coins">
+          <span class="coin-icon"></span><span id="coin-count">0</span>
+        </div>
+        <button id="options-btn" class="gear" title="Options" aria-label="Options">
+          <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.7 7.7 0 0 0-1.7-1l-.4-2.6h-4l-.4 2.6a7.7 7.7 0 0 0-1.7 1l-2.5-1-2 3.5L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.7 7.7 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.7 7.7 0 0 0 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        </button>
       </div>
     </header>
 
@@ -29,8 +34,8 @@
         <button data-tab="shop" class="active">Shop</button>
         <button data-tab="sell">Sell<span id="basket-count" class="badge" hidden></span></button>
         <button data-tab="upgrades">Upgrades</button>
+        <button data-tab="goals">Goals<span id="goal-count" class="badge" hidden></span></button>
         <button data-tab="guide">Guide</button>
-        <button data-tab="options">Options</button>
       </nav>
       <section id="panel"></section>
     </aside>
@@ -43,19 +48,23 @@
     <canvas id="fx"></canvas>
     <div id="popup" class="popup" hidden></div>
     <img id="held" alt="">
+    <div id="tip" class="tip" hidden></div>
     <div id="toasts"></div>
   </div>
   <div id="rotate">Turn your phone sideways to play.</div>
 
-  <script src="js/util.js?v=0.4.2"></script>
-  <script src="js/data.js?v=0.4.2"></script>
-  <script src="js/state.js?v=0.4.2"></script>
-  <script src="js/farm.js?v=0.4.2"></script>
-  <script src="js/workers.js?v=0.4.2"></script>
-  <script src="js/plants.js?v=0.4.2"></script>
-  <script src="js/weather.js?v=0.4.2"></script>
-  <script src="js/render.js?v=0.4.2"></script>
-  <script src="js/ui.js?v=0.4.2"></script>
-  <script src="js/main.js?v=0.4.2"></script>
+  <script src="js/util.js?v=0.5"></script>
+  <script src="js/data.js?v=0.5"></script>
+  <script src="js/state.js?v=0.5"></script>
+  <script src="js/farm.js?v=0.5"></script>
+  <script src="js/goals.js?v=0.5"></script>
+  <script src="js/sound.js?v=0.5"></script>
+  <script src="js/workers.js?v=0.5"></script>
+  <script src="js/plants.js?v=0.5"></script>
+  <script src="js/weather.js?v=0.5"></script>
+  <script src="js/render.js?v=0.5"></script>
+  <script src="js/ui.js?v=0.5"></script>
+  <script src="js/tutorial.js?v=0.5"></script>
+  <script src="js/main.js?v=0.5"></script>
 </body>
 </html>

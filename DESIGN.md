@@ -58,6 +58,8 @@ Phase 7 is done. The tool shop restocks every 4 minutes and the worker shop ever
 
 Phase 8 is done. The farm has a level from 1 to 20, and harvesting earns XP, with rarer crops giving more. Levels unlock seed rarities, tools, workers, farm expansions, the weather, and the rarest weathers, and the shops show what is still locked. Farms from before this update got a level based on what they had already harvested. At level 12 you can rebirth: the farm spins into a black hole and you get GMO Points, more of them the more coins you earned that run. The black hole screen has a skill tree with four branches (Growth, Market, Luck, and Workers) and twelve skills. The guide, goals, lifetime stats, and skills carry over between runs.
 
+Phase 9 is done. A second after you leave the black hole for the first time, a little guy walks in from the left, puts up a TOWN sign, and walks off, leaving a dirt path behind him. The farm moves right to make room. Clicking the sign opens the Town, a street that follows the time of day. The Casino has Coin Flip, Rock Paper Scissors, Blackjack, and Slots. Each crop can be bet once, a win multiplies its value, and a loss halves it. Every game is close to an even bet over many plays. At the Weather Station the weatherman takes a crop and sets the next weather, and better crops make rare weathers more likely. Two more buildings are boarded up for later updates.
+
 ## Later phases
 
 | Phase | What gets added |

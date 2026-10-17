@@ -27,7 +27,7 @@
       goalsClaimed: {},                                 // goal id to true
       tutorial: 0,                                      // step of the first time tutorial, or -1 when done
       xp: 0,                                            // total XP this run; the farm level comes from it
-      rebirth: { count: 0, gmo: 0, earnedGmo: 0, skills: {}, townSeen: false },
+      rebirth: { count: 0, gmo: 0, earnedGmo: 0, skills: {}, townSeen: false, townVisited: false },
     };
   };
 
@@ -106,11 +106,12 @@
     for (const id in d.discovered || {}) if (FP.MODS[id]) s.discovered[id] = true;
     if (d.weather && FP.WEATHER_BY_ID[d.weather.id] && Number.isFinite(d.weather.endsAt)) {
       s.weather = { id: d.weather.id, endsAt: d.weather.endsAt };
+      if (FP.WEATHER_BY_ID[d.weather.forecast]) s.weather.forecast = d.weather.forecast;
     }
 
     s.harvest = (Array.isArray(d.harvest) ? d.harvest : [])
       .filter(item => item && FP.SEED_BY_ID[item.seedId] && Number.isFinite(item.value) && item.value >= 0)
-      .map(item => ({ seedId: item.seedId, value: item.value, mods: cleanMods(item.mods) }));
+      .map(item => ({ seedId: item.seedId, value: item.value, mods: cleanMods(item.mods), bet: item.bet === true }));
 
     if (d.shop && Array.isArray(d.shop.stock)) {
       s.shop.stock = d.shop.stock
@@ -168,6 +169,7 @@
       earnedGmo: Math.max(0, Math.floor(num(rb.earnedGmo, 0))),
       skills: {},
       townSeen: rb.townSeen === true,
+      townVisited: rb.townVisited === true,
     };
     for (const id in rb.skills || {}) {
       if (FP.SKILL_BY_ID[id]) s.rebirth.skills[id] = FP.clamp(Math.floor(num(rb.skills[id], 0)), 0, FP.SKILL_BY_ID[id].max);

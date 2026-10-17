@@ -21,6 +21,7 @@
     action(name, data, el) {
       if (actions[name]) actions[name](data || {}, el);
     },
+    toast: msg => toast(msg),
     // Putting the trowel away drops whatever it was carrying back where it was.
     onToolChange() {
       view.carrying = null;
@@ -235,6 +236,27 @@
     closeVoid() {
       FP.blackHole.hide();
       ui.refresh();
+      maybeStartTownIntro(1000);
+    },
+
+    openTown() {
+      if (FP.renderer.introRunning()) return;
+      state.rebirth.townVisited = true;
+      ui.closeBuilding();
+      FP.town.show();
+      FP.sfx("click");
+    },
+
+    closeTown() {
+      FP.town.hide();
+      ui.refresh();
+    },
+
+    // A Town building changed the basket or the weather.
+    townChanged() {
+      ui.refreshTab("sell");
+      ui.refreshTab("guide");
+      FP.save(state);
     },
 
     buySkill(d) {
@@ -481,6 +503,7 @@
       return;
     }
     view.mouse = toGame(e);
+    if (FP.renderer.signAt(state, view.mouse.x, view.mouse.y)) return actions.openTown();
     const cell = FP.plotAt(state, view.mouse.x, view.mouse.y);
     view.hover = cell;
     touching = e.pointerType === "touch";
@@ -515,6 +538,8 @@
 
   window.addEventListener("keydown", e => {
     if (e.key === "Escape") {
+      if (FP.town.modal) FP.town.closeModal();
+      else if (FP.town.open) actions.closeTown();
       ui.setTool(null);
       ui.closeBuilding();
     }
@@ -535,6 +560,7 @@
     stage.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
     FP.renderer.resize(scale * (window.devicePixelRatio || 1));
     FP.blackHole.resize(scale * (window.devicePixelRatio || 1));
+    FP.town.resize(scale * (window.devicePixelRatio || 1));
   }
 
   // ---------- Saving ----------
@@ -588,6 +614,17 @@
       ui.refreshTab("guide");
     }
     lastTime = time.id;
+  }
+
+  // After the first rebirth, a little guy walks in and puts up the sign to the Town.
+  function maybeStartTownIntro(delay) {
+    if (state.rebirth.count < 1 || state.rebirth.townSeen) return;
+    state.rebirth.townSeen = true; // the farm slides right to make room for the path
+    FP.renderer.startTownIntro(performance.now() + delay, () => {
+      toast("Someone put up a sign next to your farm. Click it to visit the Town.", true);
+      FP.sfx("goal");
+    });
+    FP.save(state);
   }
 
   // Swaps in a new state, after a reset or a rebirth, and clears everything tied to the old one.
@@ -739,6 +776,7 @@
     ui.tick(now, dt);
     FP.renderer.draw(state, now, dt, view);
     FP.blackHole.draw(now);
+    FP.town.draw(now);
     requestAnimationFrame(frame);
   }
 
@@ -759,6 +797,8 @@
   ui.init(game);
   tutorial.init(game);
   FP.blackHole.init(game);
+  FP.town.init(game);
+  maybeStartTownIntro(2500); // for farms that rebirthed before the Town existed
   lastLevel = FP.level(state);
 
   if (firstVisit) {

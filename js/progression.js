@@ -136,6 +136,7 @@
       earnedGmo: state.rebirth.earnedGmo + gmo,
       skills: state.rebirth.skills,
       townSeen: state.rebirth.townSeen,
+      townVisited: state.rebirth.townVisited,
     };
     applyRunBonuses(next, now);
     return { state: next, gmo };

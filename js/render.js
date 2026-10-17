@@ -9,18 +9,23 @@
 
   // ---------- Layout ----------
 
+  // Once the Town exists, the farm moves right to make room for the path and the sign.
+  FP.TOWN_STRIP = 100;
+  const farmLeft = state => (state.rebirth && state.rebirth.townSeen ? FP.TOWN_STRIP : 0);
+
   FP.layout = function (state) {
     const gap = 12;
+    const left = farmLeft(state);
     const size = Math.min(
       116,
-      (FARM.w - 56 - gap * (state.cols - 1)) / state.cols,
+      (FARM.w - left - 56 - gap * (state.cols - 1)) / state.cols,
       (FARM.h - 56 - gap * (state.rows - 1)) / state.rows
     );
     const totalW = size * state.cols + gap * (state.cols - 1);
     const totalH = size * state.rows + gap * (state.rows - 1);
     return {
       size, gap, totalW, totalH,
-      x0: FARM.x + (FARM.w - totalW) / 2,
+      x0: FARM.x + left + (FARM.w - left - totalW) / 2,
       y0: FARM.y + (FARM.h - totalH) / 2,
     };
   };
@@ -389,7 +394,7 @@
   }
 
   function farmLayer(state, L) {
-    const key = state.cols + "x" + state.rows + "@" + R.scale;
+    const key = state.cols + "x" + state.rows + "@" + R.scale + "|" + L.x0;
     if (key === farmKey) return farmCache;
     const { c, g } = makeLayer();
     drawFrame(g, L);
@@ -1023,6 +1028,146 @@
     }
   }
 
+  // ---------- The road to Town ----------
+  // After the first rebirth a little guy walks in, puts up a sign, and leaves a path behind him.
+
+  FP.drawPerson = person;
+
+  const SIGN = { x: 62, base: 378 };          // where the sign post meets the ground
+  const SIGN_RECT = { x: 18, y: 286, w: 88, h: 96 };
+  const intro = { start: 0, done: true, onDone: null, dug: [] };
+
+  // startAt is a time from performance.now(). onDone runs once he has walked away.
+  R.startTownIntro = function (startAt, onDone) {
+    Object.assign(intro, { start: startAt, done: false, onDone, dug: [] });
+  };
+  R.introRunning = () => !intro.done;
+
+  // Where the guy and the sign are at a given moment of the cutscene.
+  function introFrame(now) {
+    const k = (now - intro.start) / 1000;
+    if (k < 0) return { guy: null, path: 0, sign: 0 };
+    if (k < 2.2) return { guy: { x: -30 + 82 * (k / 2.2), moving: true, carrying: true }, path: (-30 + 82 * (k / 2.2) + 40) / (SIGN.x + 40), sign: 0 };
+    if (k < 3.4) return { guy: { x: 52, moving: false, carrying: false, hammer: true }, path: 1, sign: Math.min(1, (k - 2.2) / 0.6) };
+    if (k < 5.4) return { guy: { x: 52 - 100 * ((k - 3.4) / 2), moving: true }, path: 1, sign: 1 };
+    return null;
+  }
+
+  function drawPath(ctx, reveal) {
+    if (reveal <= 0) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-50, 300, (SIGN.x + 50) * Math.min(1, reveal), 160);
+    ctx.clip();
+    ctx.lineCap = "round";
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(-40, SIGN.base + 14);
+      ctx.bezierCurveTo(-5, SIGN.base + 30, 25, SIGN.base - 2, SIGN.x + 6, SIGN.base + 8);
+    };
+    trace();
+    ctx.lineWidth = 30;
+    ctx.strokeStyle = "#8a6339";
+    ctx.stroke();
+    trace();
+    ctx.lineWidth = 24;
+    ctx.strokeStyle = "#c79a64";
+    ctx.stroke();
+    const rand = FP.rng(7);
+    ctx.fillStyle = "#a07a50";
+    for (let i = 0; i < 16; i++) {
+      ctx.beginPath();
+      ctx.arc(-30 + rand() * (SIGN.x + 30), SIGN.base + 4 + rand() * 18, 1.5 + rand() * 2, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawSign(ctx, grow, t, glow) {
+    if (grow <= 0) return;
+    ctx.save();
+    ctx.translate(SIGN.x, SIGN.base);
+    ctx.scale(1, grow);
+    if (glow) {
+      const g = ctx.createRadialGradient(0, -60, 10, 0, -60, 70);
+      g.addColorStop(0, `rgba(255,240,170,${0.35 + 0.25 * Math.sin(t * 3)})`);
+      g.addColorStop(1, "rgba(255,240,170,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(-70, -130, 140, 140);
+    }
+    FP.roundRect(ctx, -5, -70, 10, 72, 3);
+    ctx.fillStyle = "#8a5a36";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#4a2d16";
+    ctx.stroke();
+    FP.roundRect(ctx, -42, -92, 84, 50, 6);
+    ctx.fillStyle = "#d9a86a";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#4a2d16";
+    ctx.font = "700 17px " + FP.displayFont();
+    ctx.fillText("TOWN", 0, -71);
+    ctx.font = "700 20px " + FP.displayFont();
+    ctx.fillText("←", 0, -50);
+    ctx.restore();
+  }
+
+  // Draws the path under everything else on the farm.
+  function drawRoadUnder(ctx, state, now) {
+    if (!state.rebirth.townSeen) return;
+    const f = intro.done ? { path: 1 } : introFrame(now);
+    drawPath(ctx, f ? f.path : 1);
+  }
+
+  // Draws the sign and, during the cutscene, the little guy.
+  function drawRoadOver(ctx, state, now, t, view) {
+    if (!state.rebirth.townSeen) return;
+    if (intro.done) {
+      const hovered = view.mouse && R.signAt(state, view.mouse.x, view.mouse.y);
+      drawSign(ctx, 1, t, hovered || !state.rebirth.townVisited);
+      return;
+    }
+    const f = introFrame(now);
+    if (!f) {
+      intro.done = true;
+      if (intro.onDone) intro.onDone();
+      drawSign(ctx, 1, t, true);
+      return;
+    }
+    drawSign(ctx, f.sign, t, false);
+    if (f.guy) {
+      if (f.guy.hammer) {
+        // Little puffs of dirt as the post goes in
+        const k = (now - intro.start) / 1000;
+        [2.4, 2.8, 3.1].forEach((when, i) => {
+          if (k >= when && !intro.dug[i]) {
+            intro.dug[i] = true;
+            fx.burst(SIGN.x, SIGN.base, "#8a6339", 6, 0.5);
+            FP.sfx("dig");
+          }
+        });
+      }
+      const carry = f.guy.carrying ? (c, x, y, s) => {
+        FP.roundRect(c, x - s * 0.1, y - s * 0.55, s * 0.9, s * 0.5, 3);
+        c.fillStyle = "#d9a86a";
+        c.fill();
+        c.lineWidth = 1.5;
+        c.strokeStyle = "#4a2d16";
+        c.stroke();
+      } : null;
+      const bob = f.guy.hammer ? Math.abs(Math.sin(((now - intro.start) / 1000) * 9)) * 3 : 0;
+      person(ctx, f.guy.x, SIGN.base + 12 - bob, 24, "#6b8e23", t, f.guy.moving, carry);
+    }
+  }
+
+  R.signAt = function (state, x, y) {
+    if (!state.rebirth.townSeen || !intro.done) return false;
+    return x >= SIGN_RECT.x && x <= SIGN_RECT.x + SIGN_RECT.w && y >= SIGN_RECT.y && y <= SIGN_RECT.y + SIGN_RECT.h;
+  };
+
   // ---------- Tooltip ----------
 
   // Read each time, so a font change in the CSS shows up on the canvas too.
@@ -1154,6 +1299,7 @@
     ctx.drawImage(bgCache, 0, 0, W, H);
 
     const L = FP.layout(state);
+    drawRoadUnder(ctx, state, performance.now());
     ctx.drawImage(farmLayer(state, L), 0, 0, W, H);
     const tool = view.tool;
     const carrying = view.carrying;
@@ -1221,6 +1367,7 @@
     updateWalkers(state, L, dt);
     drawPulses(ctx, dt);
     drawWalkers(ctx, state, L, t);
+    drawRoadOver(ctx, state, performance.now(), t, view);
     drawFlights(ctx, dt, t);
 
     if (!FP.settings.calm) drawClouds(ctx, t);

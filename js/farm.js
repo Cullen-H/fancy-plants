@@ -291,11 +291,16 @@
   }
 
   // Clear skies come between every other kind of weather.
+  // A forecast from the Weather Station replaces the next weather, whatever the time of day.
   FP.nextWeather = function (state, now) {
     const wasClear = state.weather.id === "clear";
-    const next = wasClear ? pickWeather(state, now) : FP.WEATHER_BY_ID.clear;
+    const forecast = state.weather.forecast;
+    let next;
+    if (wasClear && forecast) next = FP.WEATHER_BY_ID[forecast];
+    else next = wasClear ? pickWeather(state, now) : FP.WEATHER_BY_ID.clear;
     const [lo, hi] = next.mod ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
     state.weather = { id: next.id, endsAt: now + FP.randInt(lo, hi) * 1000 };
+    if (forecast && !(wasClear && forecast)) state.weather.forecast = forecast; // still waiting its turn
     return next;
   };
 

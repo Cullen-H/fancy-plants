@@ -54,6 +54,8 @@ Phase 5 is done. Plants that regrow now lose their modifiers with each harvest, 
 
 Phase 6 is mostly done. Sound effects are made in code, so there are no audio files to load. Options moved behind a gear button and has a volume slider and a setting for fewer effects. New players get a six step tutorial that they can skip or replay. The store page description is still to do, and you will write that one.
 
+Phase 7 is done. The tool shop restocks every 4 minutes and the worker shop every 6, so tools and workers can sell out. A day and night clock runs alongside the weather, and a full day takes 24 real minutes. The farm turns warm at dawn and dusk, gets dark at night, and fireflies come out. Moonlight is no longer a weather. Instead, any plant can become Moonlit at night. Each weather can only start at certain times, so Sunny happens in the day and Blood Moon only at midnight.
+
 ## Later phases
 
 | Phase | What gets added |
@@ -63,6 +65,18 @@ Phase 6 is mostly done. Sound effects are made in code, so there are no audio fi
 | 4 | Workers and buildings, rebuilt from scratch (see below) |
 | 5 | The economy curve, offline growth, and goals to work toward |
 | 6 | Sound, settings, a tutorial, the store page, and release |
+
+### Phases 7 to 9
+
+| Phase | What gets added |
+|---|---|
+| 7 | The tool and worker shops restock on timers. A day and night clock runs alongside the weather, and each weather can only start at certain times of day. |
+| 8 | Farm levels that unlock seeds, tools, and workers. Rebirth resets the farm for GMO Points, which are spent on a skill tree around a black hole labeled "Fancy Plants!" |
+| 9 | After the first rebirth, a little guy walks in and plants a sign that leads to the Town. The Town has a Casino and a Weather Station to start with. |
+
+**Casino.** You bet a harvested plant on a game such as Blackjack, Rock Paper Scissors (best of 3), or Slots. Winning raises the plant's value. Losing cuts its value in half, but you keep the plant.
+
+**Weather Station.** You hand the weatherman a harvested plant, and he picks the next weather. A rarer, more valuable plant makes a rare weather more likely, but he decides which one.
 
 Fusions will live in one table that lists two inputs and a result. That replaces the long chain of if statements from the original, and adding a fusion becomes one new line.
 

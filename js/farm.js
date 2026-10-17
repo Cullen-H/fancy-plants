@@ -166,6 +166,14 @@
     state.shop.nextRefresh = now + FP.SHOP_REFRESH_MS;
   };
 
+  // Tools restock on their own timer. The Watering Can is always there.
+  FP.refreshToolShop = function (state, now) {
+    state.toolShop.stock = FP.TOOLS
+      .filter(t => Math.random() < t.stockChance)
+      .map(t => ({ id: t.id, left: FP.randInt(t.stockMin, t.stockMax) }));
+    state.toolShop.nextRefresh = now + FP.TOOL_REFRESH_MS;
+  };
+
   FP.buySeed = function (state, index) {
     const slot = state.shop.stock[index];
     if (!slot) return "That seed isn't in the shop anymore.";
@@ -261,8 +269,10 @@
 
   FP.currentWeather = state => FP.WEATHER_BY_ID[state.weather.id];
 
-  function pickWeather() {
-    const options = FP.WEATHER.filter(w => w.weight > 0);
+  // Only weathers that can start at this time of day are in the running.
+  function pickWeather(now) {
+    const time = FP.timeOfDay(now).id;
+    const options = FP.WEATHER.filter(w => w.weight > 0 && (w.times === "all" || w.times.includes(time)));
     let roll = Math.random() * options.reduce((sum, w) => sum + w.weight, 0);
     for (const w of options) {
       roll -= w.weight;
@@ -274,10 +284,20 @@
   // Clear skies come between every other kind of weather.
   FP.nextWeather = function (state, now) {
     const wasClear = state.weather.id === "clear";
-    const next = wasClear ? pickWeather() : FP.WEATHER_BY_ID.clear;
+    const next = wasClear ? pickWeather(now) : FP.WEATHER_BY_ID.clear;
     const [lo, hi] = wasClear ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
     state.weather = { id: next.id, endsAt: now + FP.randInt(lo, hi) * 1000 };
     return next;
+  };
+
+  // At night, plants can become Moonlit no matter what the weather is doing.
+  FP.nightTick = function (state, now, onChange) {
+    if (!FP.isNight(now)) return;
+    state.plots.forEach((row, y) => row.forEach((plant, x) => {
+      if (!plant || Math.random() >= FP.NIGHT_CHANCE) return;
+      const result = FP.addMod(state, plant, "moonlit");
+      if (result) onChange(x, y, plant, "moonlit", result);
+    }));
   };
 
   // Gives some plants the current weather's modifier.
@@ -298,8 +318,11 @@
   FP.buyTool = function (state, id) {
     const tool = FP.TOOL_BY_ID[id];
     if (!tool) return "That tool doesn't exist.";
+    const slot = state.toolShop.stock.find(s => s.id === id);
+    if (!slot || slot.left <= 0) return "The " + tool.name + " is sold out until the next restock.";
     if (state.coins < tool.price) return "You need " + FP.formatCoins(tool.price - state.coins) + " more coins for that.";
     state.coins -= tool.price;
+    slot.left--;
     state.tools[id] = (state.tools[id] || 0) + tool.uses;
     return null;
   };

@@ -205,6 +205,8 @@
       FP.clearSave();
       state = FP.newState();
       FP.refreshShop(state, Date.now());
+      FP.refreshToolShop(state, Date.now());
+      FP.refreshWorkerShop(state, Date.now());
       FP.fx.clear();
       FP.renderer.forget();
       FP.renderer.clearWorkers();
@@ -546,7 +548,20 @@
         weatherChanged++;
         celebrateMod(x, y, plant, modId, result);
       });
+      FP.nightTick(state, now, celebrateMod);
     }
+  }
+
+  // Announces each new time of day.
+  let lastTime = null;
+  function updateTime(now) {
+    const time = FP.timeOfDay(now);
+    if (lastTime && lastTime !== time.id) {
+      if (time.id === "evening") toast("Night is falling. Plants can become Moonlit until dawn.");
+      else if (time.id === "dawn") toast("The sun is coming up.");
+      ui.refreshTab("guide");
+    }
+    lastTime = time.id;
   }
 
   // Lets the player know when a goal is ready to claim.
@@ -613,6 +628,19 @@
     last = ts;
     const now = Date.now();
 
+    // Tools and workers restock quietly, except that rare ones get a message.
+    if (now >= state.toolShop.nextRefresh) {
+      FP.refreshToolShop(state, now);
+      const rare = state.toolShop.stock.map(s => FP.TOOL_BY_ID[s.id]).filter(t => t.rarity >= 2).pop();
+      if (rare) toast("The tool shop has " + FP.withArticle(rare.name) + " in stock.");
+      ui.refreshTab("shop");
+    }
+    if (now >= state.workerShop.nextRefresh) {
+      FP.refreshWorkerShop(state, now);
+      const rare = state.workerShop.stock.map(s => FP.WORKER_BY_ID[s.id]).filter(w => w.rarity >= 2).pop();
+      if (rare) toast(FP.withArticle(rare.name).replace(/^./, c => c.toUpperCase()) + " is looking for work in the shop.");
+      ui.refreshTab("shop");
+    }
     if (now >= state.shop.nextRefresh) {
       FP.refreshShop(state, now);
       toast("The seed shop has new stock.");
@@ -630,6 +658,7 @@
     }
 
     updateWeather(now);
+    updateTime(now);
     tutorial.tick(now);
     checkGoals();
     FP.runWorkers(state, now, onWorkerEvent);
@@ -653,6 +682,8 @@
 
   const startNow = Date.now();
   if (startNow >= state.shop.nextRefresh) FP.refreshShop(state, startNow);
+  if (startNow >= state.toolShop.nextRefresh) FP.refreshToolShop(state, startNow);
+  if (startNow >= state.workerShop.nextRefresh) FP.refreshWorkerShop(state, startNow);
   // Weather doesn't happen while the game is closed, so a returning player starts fresh.
   if (startNow >= state.weather.endsAt) FP.nextWeather(state, startNow);
   nextWeatherTick = startNow + FP.WEATHER_TICK_MS;

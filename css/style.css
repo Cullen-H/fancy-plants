@@ -636,3 +636,7 @@ html, body {
 
 /* Headings and the logo use the display font. */
 .logo, .panel-head h2, .section, .card-title, .popup-head b, .weather-text b, .goal-text { font-family: var(--font-display); }
+
+/* ---------- Phase 7: clock ---------- */
+.clock-divider { width: 2px; height: 30px; margin: 0 4px; background: rgba(255, 244, 214, 0.25); }
+#clock-icon { width: 34px; height: 34px; }

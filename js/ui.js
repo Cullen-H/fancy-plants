@@ -30,6 +30,9 @@
       weatherIcon: $("#weather img"),
       weatherName: $("#weather-name"),
       weatherTime: $("#weather-time"),
+      clockIcon: $("#clock-icon"),
+      clockName: $("#clock-name"),
+      clockTime: $("#clock-time"),
       popup: $("#popup"),
       goalCount: $("#goal-count"),
     };
@@ -212,12 +215,17 @@
     }).join("");
   }
 
+  const soldOutRow = text => `<p class="empty">${text}</p>`;
+
   function toolRows(state) {
-    return FP.TOOLS.map(tool => {
+    if (!state.toolShop.stock.length) return soldOutRow("The tool shop is empty until the next restock.");
+    return state.toolShop.stock.map(slot => {
+      const tool = FP.TOOL_BY_ID[slot.id];
       const rarity = FP.RARITIES[tool.rarity];
       const poor = state.coins < tool.price;
+      const sold = slot.left <= 0;
       const owned = state.tools[tool.id] || 0;
-      return `<li class="row" style="--rarity:${rarity.color}">
+      return `<li class="row ${sold ? "sold" : ""}" style="--rarity:${rarity.color}">
         <img class="icon" src="${FP.toolIconURL(tool)}" alt="">
         <div class="info">
           <div class="name">${tool.name}</div>
@@ -225,8 +233,8 @@
           <div class="meta">${tool.desc}</div>
         </div>
         <div class="buy">
-          <button class="btn btn-gold ${poor ? "poor" : ""}" data-action="buyTool" data-id="${tool.id}">${coin}${FP.formatCoins(tool.price)}</button>
-          <div class="stock">${owned ? owned + " owned" : ""}</div>
+          <button class="btn btn-gold ${poor ? "poor" : ""}" data-action="buyTool" data-id="${tool.id}" ${sold ? "disabled" : ""}>${coin}${FP.formatCoins(tool.price)}</button>
+          <div class="stock">${sold ? "Sold out" : slot.left + " left"}${owned ? ", " + owned + " uses owned" : ""}</div>
         </div>
       </li>`;
     }).join("");
@@ -245,11 +253,14 @@
   ui.workerStats = workerStats;
 
   function workerRows(state) {
-    return FP.WORKERS.map(def => {
+    if (!state.workerShop.stock.length) return soldOutRow("Nobody is looking for work right now. Check back after the next restock.");
+    return state.workerShop.stock.map(slot => {
+      const def = FP.WORKER_BY_ID[slot.id];
+      const sold = slot.left <= 0;
       const rarity = FP.RARITIES[def.rarity];
       const price = FP.workerPrice(state, def.id);
       const owned = state.buildings.filter(b => b.workerId === def.id).length + state.workerBag.filter(b => b.workerId === def.id).length;
-      return `<li class="row" style="--rarity:${rarity.color}">
+      return `<li class="row ${sold ? "sold" : ""}" style="--rarity:${rarity.color}">
         <img class="icon" src="${FP.buildingIconURL(def)}" alt="">
         <div class="info">
           <div class="name">${def.name}</div>
@@ -257,8 +268,8 @@
           <div class="meta">${def.desc}</div>
         </div>
         <div class="buy">
-          <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-action="hire" data-id="${def.id}">${coin}${FP.formatCoins(price)}</button>
-          <div class="stock">${owned ? owned + " hired" : ""}</div>
+          <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-action="hire" data-id="${def.id}" ${sold ? "disabled" : ""}>${coin}${FP.formatCoins(price)}</button>
+          <div class="stock">${sold ? "Hired" : owned ? owned + " already hired" : ""}</div>
         </div>
       </li>`;
     }).join("");
@@ -266,8 +277,8 @@
 
   const SHOP_VIEWS = {
     seeds: state => ({ head: `<h2>Seed Shop</h2><p class="sub">New stock arrives in <b id="shop-timer">${FP.formatClock(state.shop.nextRefresh - Date.now())}</b></p>`, rows: seedRows(state) }),
-    tools: state => ({ head: `<h2>Tool Shop</h2><p class="sub">Tools are always in stock.</p>`, rows: toolRows(state) }),
-    workers: state => ({ head: `<h2>Workers</h2><p class="sub">Each worker comes with a building that takes up one plot. Hiring a second of the same kind costs more.</p>`, rows: workerRows(state) }),
+    tools: state => ({ head: `<h2>Tool Shop</h2><p class="sub">New stock arrives in <b id="shop-timer">${FP.formatClock(state.toolShop.nextRefresh - Date.now())}</b></p>`, rows: toolRows(state) }),
+    workers: state => ({ head: `<h2>Workers</h2><p class="sub">New workers arrive in <b id="shop-timer">${FP.formatClock(state.workerShop.nextRefresh - Date.now())}</b>. Each one comes with a building that takes up one plot, and a second of the same kind costs more.</p>`, rows: workerRows(state) }),
   };
 
   const PANELS = {
@@ -342,10 +353,13 @@
       const nowText = now.mod
         ? `While it lasts, plants can become ${modTag(now.mod)}, which makes their harvests worth ${mult(now.mod)}.`
         : "Plants grow normally until the weather changes.";
+      const whenText = w => w.times === "all" ? "Any time of day" : w.times.map(id => FP.TIME_BY_ID[id].name).join(", ");
       const weatherRows = FP.WEATHER.filter(w => w.mod).map(w => `<li class="row slim">
           <img class="icon small" src="${FP.weatherIconURL(w.id)}" alt="">
-          <div class="info"><div class="name">${w.name}</div><div class="meta">Makes plants ${modTag(w.mod)} ${mult(w.mod)}</div></div>
+          <div class="info"><div class="name">${w.name}</div><div class="meta">Makes plants ${modTag(w.mod)} ${mult(w.mod)}</div>
+          <div class="meta">Can start: ${whenText(w)}</div></div>
         </li>`).join("");
+      const time = FP.timeOfDay(Date.now());
       const luckyRows = ["golden", "prismatic"].map(id => `<li class="row slim">
           <div class="info"><div class="name">${modTag(id)} ${mult(id)}</div>
           <div class="meta">${id === "golden" ? "About 1 in 50 plants grows Golden." : "About 1 in 500 plants grows Prismatic."}</div></div>
@@ -364,6 +378,12 @@
           <div><div class="card-title">Right now: ${now.name}</div><p>${nowText}</p></div>
         </div>
         <p class="guide-note">A modifier stays on a plant until you harvest it. Plants that regrow start each new crop without modifiers. Modifiers multiply together.</p>
+        <h3 class="section">Day and night</h3>
+        <div class="card now">
+          <img class="icon small" src="${FP.weatherIconURL(time.night ? "moonlight" : "sunny")}" alt="">
+          <div><div class="card-title">It's ${time.name.toLowerCase()} now</div>
+          <p>A full day lasts 24 minutes. From Evening until Dawn, any plant can become ${modTag("moonlit")} ${mult("moonlit")}, whatever the weather is doing. Each weather can only start at certain times of day.</p></div>
+        </div>
         <h3 class="section">Weather</h3><ul class="list">${weatherRows}</ul>
         <h3 class="section">Lucky finds</h3><ul class="list">${luckyRows}</ul>
         <h3 class="section">Worker gifts</h3>
@@ -505,7 +525,8 @@
     if (ui.tab === "shop") {
       const timer = document.getElementById("shop-timer");
       if (timer) {
-        const text = FP.formatClock(state.shop.nextRefresh - now);
+        const shop = ui.shopView === "tools" ? state.toolShop : ui.shopView === "workers" ? state.workerShop : state.shop;
+        const text = FP.formatClock(shop.nextRefresh - now);
         if (timer.textContent !== text) timer.textContent = text;
       }
     }
@@ -528,6 +549,15 @@
       ui.els.goalCount.hidden = claimable === 0;
       ui.els.goalCount.textContent = claimable;
     }
+
+    const time = FP.timeOfDay(now);
+    if (time.id !== ui.lastTimeId) {
+      ui.lastTimeId = time.id;
+      ui.els.clockIcon.src = FP.weatherIconURL(time.night ? "moonlight" : time.id === "dawn" || time.id === "dusk" ? "clear" : "sunny");
+      ui.els.clockName.textContent = time.name;
+    }
+    const clock = FP.clockText(now);
+    if (ui.els.clockTime.textContent !== clock) ui.els.clockTime.textContent = clock;
 
     if (state.harvest.length !== ui.lastBasket) {
       ui.lastBasket = state.harvest.length;

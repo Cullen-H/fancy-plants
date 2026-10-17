@@ -985,6 +985,44 @@
     flights.length = 0;
   };
 
+  // ---------- Time of day ----------
+
+  // Fireflies come out at night in place of the butterflies.
+  function drawFireflies(ctx, t, alpha) {
+    for (let i = 0; i < 14; i++) {
+      const x = 450 + 420 * Math.sin(t * 0.07 * (1 + i % 3) + i * 1.7);
+      const y = 350 + 250 * Math.sin(t * 0.05 * (1 + i % 2) + i * 2.3);
+      const glow = (0.5 + 0.5 * Math.sin(t * 2.5 + i * 1.3)) * alpha;
+      if (glow < 0.05) continue;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 10);
+      g.addColorStop(0, `rgba(240,255,150,${0.9 * glow})`);
+      g.addColorStop(1, "rgba(240,255,150,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  function drawDaylight(ctx, now, t) {
+    const light = FP.lightAt(now);
+    if (light.warm > 0.005) {
+      ctx.fillStyle = `rgba(255,140,60,${light.warm})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (light.dark > 0.005) {
+      ctx.fillStyle = `rgba(16,24,70,${light.dark})`;
+      ctx.fillRect(0, 0, W, H);
+      const k = light.dark / 0.42;
+      const g = ctx.createRadialGradient(40, 60, 0, 40, 60, 380);
+      g.addColorStop(0, `rgba(230,236,255,${0.35 * k})`);
+      g.addColorStop(1, "rgba(230,236,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 440, 460);
+      if (!FP.settings.calm) drawFireflies(ctx, t, k);
+    }
+  }
+
   // ---------- Tooltip ----------
 
   // Read each time, so a font change in the CSS shows up on the canvas too.
@@ -1189,9 +1227,11 @@
     updateSky(state, dt);
     // Butterflies stay out of rain, snow, and the dark.
     ctx.globalAlpha = FP.ROUGH_WEATHER[sky.id] ? 1 - sky.alpha : 1;
+    ctx.globalAlpha *= 1 - FP.lightAt(now).dark / 0.42; // butterflies go to sleep at night
     if (ctx.globalAlpha > 0.01 && !FP.settings.calm) drawButterflies(ctx, t);
     ctx.globalAlpha = 1;
     FP.drawWeather(ctx, sky.id, t, sky.alpha);
+    drawDaylight(ctx, now, t);
 
     for (let y = 0; y < state.rows; y++) {
       for (let x = 0; x < state.cols; x++) {

@@ -79,17 +79,17 @@
 
   // ---------- Weather ----------
   // weight decides how often each weather is picked. Clear weather comes between every other kind.
+  // times lists the times of day a weather can start in. Moonlight is part of the day and night clock now.
   FP.WEATHER = [
     { id: "clear",     name: "Clear Skies",   mod: null,        weight: 0,  start: "The weather cleared up." },
-    { id: "rain",      name: "Rain",          mod: "wet",       weight: 30, noun: "rain", start: "It started to rain." },
-    { id: "sunny",     name: "Sunny",         mod: "heated",    weight: 25, noun: "sunny spell", start: "The sun is beating down on the farm." },
-    { id: "snow",      name: "Snow",          mod: "chilled",   weight: 15, noun: "snow", start: "Snow is falling." },
-    { id: "moonlight", name: "Moonlight",     mod: "moonlit",   weight: 14, noun: "moonlight", start: "The moon came out." },
-    { id: "hail",      name: "Hail",          mod: "icy",       weight: 10, noun: "hail", start: "Hail is coming down." },
-    { id: "thunder",   name: "Thunderstorm",  mod: "shocked",   weight: 6,  noun: "thunderstorm", start: "A thunderstorm rolled in." },
-    { id: "rainbow",   name: "Rainbow",       mod: "lucky",     weight: 5,  noun: "rainbow", start: "A rainbow appeared over the farm." },
-    { id: "bloodmoon", name: "Blood Moon",    mod: "blood",     weight: 4,  noun: "blood moon", start: "The moon turned red." },
-    { id: "meteors",   name: "Meteor Shower", mod: "celestial", weight: 2,  noun: "meteor shower", start: "Meteors are streaking across the sky." },
+    { id: "rain",      name: "Rain",          mod: "wet",       weight: 30, noun: "rain", times: "all", start: "It started to rain." },
+    { id: "sunny",     name: "Sunny",         mod: "heated",    weight: 25, noun: "sunny spell", times: ["morning", "noon", "afternoon"], start: "The sun is beating down on the farm." },
+    { id: "snow",      name: "Snow",          mod: "chilled",   weight: 15, noun: "snow", times: "all", start: "Snow is falling." },
+    { id: "hail",      name: "Hail",          mod: "icy",       weight: 10, noun: "hail", times: ["morning", "noon", "afternoon", "dusk"], start: "Hail is coming down." },
+    { id: "thunder",   name: "Thunderstorm",  mod: "shocked",   weight: 6,  noun: "thunderstorm", times: ["afternoon", "dusk", "evening"], start: "A thunderstorm rolled in." },
+    { id: "rainbow",   name: "Rainbow",       mod: "lucky",     weight: 5,  noun: "rainbow", times: ["dawn", "morning", "afternoon"], start: "A rainbow appeared over the farm." },
+    { id: "bloodmoon", name: "Blood Moon",    mod: "blood",     weight: 4,  noun: "blood moon", times: ["midnight"], start: "The moon turned red." },
+    { id: "meteors",   name: "Meteor Shower", mod: "celestial", weight: 2,  noun: "meteor shower", times: ["evening", "midnight", "latenight"], start: "Meteors are streaking across the sky." },
   ];
   FP.WEATHER_BY_ID = {};
   FP.WEATHER.forEach(w => { FP.WEATHER_BY_ID[w.id] = w; });
@@ -112,6 +112,11 @@
     { id: "spray",      name: "Golden Spray",   rarity: 3, price: 25000, uses: 1,
       desc: "Coats a plant in gold, so its next harvest is worth ten times more." },
   ];
+  // How likely each tool is to be in stock after a restock, and how many packs there are.
+  const TOOL_STOCK = { can: [1, 2, 4], fertilizer: [0.6, 1, 3], trowel: [0.5, 1, 2], jar: [0.3, 1, 1], spray: [0.12, 1, 1] };
+  FP.TOOLS.forEach(t => { [t.stockChance, t.stockMin, t.stockMax] = TOOL_STOCK[t.id]; });
+  FP.TOOL_REFRESH_MS = 4 * 60 * 1000;
+
   FP.TOOL_BY_ID = {};
   FP.TOOLS.forEach(tool => { FP.TOOL_BY_ID[tool.id] = tool; });
 
@@ -143,6 +148,11 @@
       every: [3, 2.5, 2], range: [2, 2, 3], grow: 0.04, chance: [0.03, 0.05, 0.08], mod: "risen",
       desc: "Calls on the shadows to grow every plant nearby, and the plants it touches can rise as Risen." },
   ];
+  // How likely each worker is to be looking for work after a restock. Each one shows up alone.
+  const WORKER_STOCK = { waterer: 0.9, picker: 0.55, cultivator: 0.3, beekeeper: 0.15, shadow: 0.05 };
+  FP.WORKERS.forEach(w => { w.stockChance = WORKER_STOCK[w.id]; });
+  FP.WORKER_REFRESH_MS = 6 * 60 * 1000;
+
   FP.WORKER_BY_ID = {};
   FP.WORKERS.forEach(w => { FP.WORKER_BY_ID[w.id] = w; });
   FP.WORKER_MAX_LEVEL = 3;

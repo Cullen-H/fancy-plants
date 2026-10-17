@@ -1,7 +1,7 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 4;
+  const SAVE_VERSION = 5;
 
   const newStats = () => ({ planted: 0, harvested: 0, earned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
@@ -15,6 +15,8 @@
       seeds: Object.assign({}, FP.START.seeds),         // seed id to count
       harvest: [],                                      // { seedId, value, mods } waiting to be sold
       shop: { stock: [], nextRefresh: 0 },
+      toolShop: { stock: [], nextRefresh: 0 },          // { id, left }
+      workerShop: { stock: [], nextRefresh: 0 },        // { id, left }
       tools: {},                                        // tool id to uses left
       upgrades: {},                                     // upgrade id to level
       weather: { id: "clear", endsAt: Date.now() + FP.WEATHER_TIMES.firstClear * 1000 },
@@ -57,7 +59,7 @@
 
   // Each save format change gets a step here that upgrades the old data.
   // Version 2 added modifiers, tools, upgrades, and weather. Version 3 added workers.
-  // Version 4 added goals, more stats, and the tutorial.
+  // Version 4 added goals, more stats, and the tutorial. Version 5 added tool and worker restocks.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
@@ -127,6 +129,13 @@
     s.workerBag = (Array.isArray(d.workerBag) ? d.workerBag : [])
       .filter(w => w && FP.WORKER_BY_ID[w.workerId])
       .map(w => ({ workerId: w.workerId, level: level(w.level) }));
+
+    for (const [key, valid] of [["toolShop", FP.TOOL_BY_ID], ["workerShop", FP.WORKER_BY_ID]]) {
+      const shop = d[key];
+      if (!shop || !Array.isArray(shop.stock)) continue;
+      s[key].stock = shop.stock.filter(x => x && valid[x.id]).map(x => ({ id: x.id, left: Math.max(0, Math.floor(num(x.left, 0))) }));
+      s[key].nextRefresh = num(shop.nextRefresh, 0);
+    }
 
     const st = d.stats || {};
     for (const key in s.stats) {

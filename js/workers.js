@@ -42,12 +42,21 @@
   // Each extra copy of the same worker costs more than the last.
   FP.workerPrice = (state, id) => Math.round(FP.WORKER_BY_ID[id].price * Math.pow(1.6, ownedCount(state, id)) / 10) * 10;
 
+  // Workers come and go. Each restock rolls who is looking for work.
+  FP.refreshWorkerShop = function (state, now) {
+    state.workerShop.stock = FP.WORKERS.filter(w => Math.random() < w.stockChance).map(w => ({ id: w.id, left: 1 }));
+    state.workerShop.nextRefresh = now + FP.WORKER_REFRESH_MS;
+  };
+
   FP.buyWorker = function (state, id) {
     const def = FP.WORKER_BY_ID[id];
     if (!def) return "That worker doesn't exist.";
+    const slot = state.workerShop.stock.find(s => s.id === id);
+    if (!slot || slot.left <= 0) return "The " + def.name + " already took a job. Check back after the next restock.";
     const price = FP.workerPrice(state, id);
     if (state.coins < price) return "You need " + FP.formatCoins(price - state.coins) + " more coins to hire them.";
     state.coins -= price;
+    slot.left--;
     state.stats.hired++;
     state.workerBag.push({ workerId: id, level: 1 });
     return null;

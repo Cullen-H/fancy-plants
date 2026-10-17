@@ -35,6 +35,10 @@
       clockTime: $("#clock-time"),
       popup: $("#popup"),
       goalCount: $("#goal-count"),
+      levelChip: $("#level"),
+      levelNum: $("#level-num"),
+      levelLabel: $("#level-label"),
+      xpBar: $("#xp-bar"),
     };
     ui.shownCoins = game.state.coins;
     ui.els.coinCount.textContent = FP.formatCoins(ui.shownCoins);
@@ -65,6 +69,7 @@
     }, { passive: false });
     ui.els.harvestAll.addEventListener("click", () => game.action("harvestAll", {}));
     ui.els.weather.addEventListener("click", () => ui.setTab("guide"));
+    ui.els.levelChip.addEventListener("click", () => ui.setTab("goals"));
     $("#options-btn").addEventListener("click", () => ui.setTab(ui.tab === "options" ? "shop" : "options"));
     // Sliders and switches in the options change settings right away.
     ui.els.panel.addEventListener("input", e => {
@@ -194,7 +199,21 @@
 
   const mult = id => "x" + FP.formatCoins(FP.MODS[id].mult);
 
+  // Grayed out rows that show what a level unlocks.
+  const lockedRow = (icon, name, note) => `<li class="row locked">
+      <img class="icon" src="${icon}" alt="">
+      <div class="info"><div class="name">${name}</div></div>
+      <span class="lock-note">${note}</span>
+    </li>`;
+
   function seedRows(state) {
+    const level = FP.level(state);
+    const locked = FP.RARITIES.map((r, i) => ({ r, i, need: FP.RARITY_LEVEL[i] })).filter(x => x.need > level)
+      .map(x => lockedRow(FP.seedIconURL(FP.SEEDS.find(s => s.rarity === x.i)), x.r.name + " seeds", "Level " + x.need)).join("");
+    return seedStockRows(state) + locked;
+  }
+
+  function seedStockRows(state) {
     return state.shop.stock.map((slot, i) => {
       const seed = FP.SEED_BY_ID[slot.seedId];
       const rarity = FP.RARITIES[seed.rarity];
@@ -218,6 +237,12 @@
   const soldOutRow = text => `<p class="empty">${text}</p>`;
 
   function toolRows(state) {
+    const locked = FP.TOOLS.filter(t => !FP.toolUnlocked(state, t.id))
+      .map(t => lockedRow(FP.toolIconURL(t), t.name, "Level " + FP.TOOL_LEVEL[t.id])).join("");
+    return toolStockRows(state) + locked;
+  }
+
+  function toolStockRows(state) {
     if (!state.toolShop.stock.length) return soldOutRow("The tool shop is empty until the next restock.");
     return state.toolShop.stock.map(slot => {
       const tool = FP.TOOL_BY_ID[slot.id];
@@ -253,6 +278,13 @@
   ui.workerStats = workerStats;
 
   function workerRows(state) {
+    const locked = FP.WORKERS.filter(w => !FP.workerUnlocked(state, w.id))
+      .map(w => lockedRow(FP.buildingIconURL(w), w.name, "Level " + FP.WORKER_LEVEL[w.id])).join("");
+    if (!FP.WORKERS.some(w => FP.workerUnlocked(state, w.id))) return soldOutRow("Workers start looking for jobs once your farm reaches level 5.") + locked;
+    return workerStockRows(state) + locked;
+  }
+
+  function workerStockRows(state) {
     if (!state.workerShop.stock.length) return soldOutRow("Nobody is looking for work right now. Check back after the next restock.");
     return state.workerShop.stock.map(slot => {
       const def = FP.WORKER_BY_ID[slot.id];
@@ -273,6 +305,24 @@
         </div>
       </li>`;
     }).join("");
+  }
+
+  function rebirthCard(state) {
+    const gmo = FP.gmoForRebirth(state);
+    const visit = state.rebirth.count > 0 ? `<button class="btn wide" data-action="openVoid" style="margin-top:8px">Visit the black hole</button>` : "";
+    if (!FP.canRebirth(state)) {
+      return `<div class="card rebirth">
+        <div class="card-title">Rebirth</div>
+        <p>At level ${FP.REBIRTH_LEVEL} you can send this farm into a black hole for GMO Points, then start over stronger. Your farm is level ${FP.level(state)}.</p>
+        ${visit}
+      </div>`;
+    }
+    return `<div class="card rebirth">
+      <div class="card-title">Rebirth</div>
+      <p>Your farm, coins, seeds, tools, upgrades, and workers will be pulled into a black hole. You keep the guide, your goals, and your skills, and you get <b>${gmo} GMO ${gmo === 1 ? "Point" : "Points"}</b> to spend on the skill tree. Earning more coins before you rebirth gives more points.</p>
+      <button class="btn btn-void wide" data-action="rebirth">Rebirth for ${gmo} GMO ${gmo === 1 ? "Point" : "Points"}</button>
+      ${visit}
+    </div>`;
   }
 
   const SHOP_VIEWS = {
@@ -318,7 +368,13 @@
     upgrades(state) {
       const next = FP.nextFarmSize(state);
       let html = `<div class="panel-head"><h2>Upgrades</h2><p class="sub">Spend coins to grow your farm.</p></div>`;
-      if (next) {
+      if (next && FP.level(state) < FP.expandLevel(state)) {
+        html += `<div class="card">
+          <div class="card-title">Bigger Farm</div>
+          <p>Your farm is ${state.cols} by ${state.rows}. The next expansion unlocks at level ${FP.expandLevel(state)}.</p>
+          <button class="btn wide" disabled>Unlocks at level ${FP.expandLevel(state)}</button>
+        </div>`;
+      } else if (next) {
         const cost = FP.expansionCost(state);
         html += `<div class="card">
           <div class="card-title">Bigger Farm</div>
@@ -331,6 +387,7 @@
           <p>Your farm is ${state.cols} by ${state.rows}, which is as big as it gets for now.</p>
         </div>`;
       }
+      html += rebirthCard(state);
       FP.UPGRADES.forEach(u => {
         const level = FP.upgradeLevel(state, u.id);
         const maxed = level >= u.max;
@@ -416,7 +473,15 @@
       const ready = open.filter(g => FP.goalDone(state, g));
       const waiting = open.filter(g => !FP.goalDone(state, g));
       const done = FP.GOALS.filter(g => state.goalsClaimed[g.id]);
-      return `<div class="panel-head"><h2>Goals</h2><p class="sub">${done.length} of ${FP.GOALS.length} done. Finish goals to earn rewards.</p></div>
+      const info = FP.levelFromXp(state.xp);
+      const upcoming = FP.UNLOCKS.filter(u => u.level > info.level).slice(0, 4);
+      const levelCard = `<div class="card">
+          <div class="card-title">Farm level ${info.level}<span class="level">${info.level < FP.MAX_LEVEL ? Math.floor(info.into) + " of " + info.need + " XP" : "Highest level"}</span></div>
+          ${info.level < FP.MAX_LEVEL ? `<div class="bar"><i style="width:${info.into / info.need * 100}%"></i></div>` : ""}
+          <p>You earn XP by harvesting. Rarer crops give more.</p>
+          ${upcoming.length ? `<ul class="unlock-list">${upcoming.map(u => `<li><b>Level ${u.level}</b><span>${u.text.charAt(0).toUpperCase() + u.text.slice(1)}</span></li>`).join("")}</ul>` : ""}
+        </div>`;
+      return `${levelCard}<div class="panel-head"><h2>Goals</h2><p class="sub">${done.length} of ${FP.GOALS.length} done. Finish goals to earn rewards.</p></div>
         <ul class="goals">${[...ready, ...waiting].map(row).join("")}</ul>
         ${done.length ? `<h3 class="section">Done</h3><ul class="goals">${done.map(row).join("")}</ul>` : ""}`;
     },
@@ -459,7 +524,7 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.5</p>`;
+        <p class="version">Fancy Plants v0.7</p>`;
     },
   };
 
@@ -550,6 +615,18 @@
       ui.els.goalCount.textContent = claimable;
     }
 
+    const info = FP.levelFromXp(state.xp);
+    const xpWidth = info.need ? Math.floor(info.into / info.need * 100) + "%" : "100%";
+    if (info.level !== ui.lastLevel) {
+      ui.lastLevel = info.level;
+      ui.els.levelNum.textContent = info.level;
+      ui.els.levelLabel.textContent = "Level " + info.level;
+    }
+    if (ui.els.xpBar.style.width !== xpWidth) {
+      ui.els.xpBar.style.width = xpWidth;
+      ui.els.levelChip.title = info.need ? Math.floor(info.into) + " of " + info.need + " XP to level " + (info.level + 1) : "Highest level";
+    }
+
     const time = FP.timeOfDay(now);
     if (time.id !== ui.lastTimeId) {
       ui.lastTimeId = time.id;
@@ -581,6 +658,7 @@
   }
 
   ui.bumpCoins = () => replay(ui.els.coins, "bump");
+  ui.pulseLevel = () => replay(ui.els.levelChip, "bump");
   ui.pulseTab = tab => replay(ui.els.tabs.querySelector(`[data-tab="${tab}"]`), "pulse");
   ui.pulseWeather = () => replay(ui.els.weather, "bump");
   ui.slotFor = (type, id) => ui.els.slots.querySelector(`.slot[data-type="${type}"][data-id="${id}"]`);

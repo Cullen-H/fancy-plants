@@ -43,6 +43,7 @@
     if (!plant || !FP.isRipe(plant, now)) return null;
     const seed = FP.SEED_BY_ID[plant.seedId];
     const item = { seedId: seed.id, value: Math.round(seed.value * FP.modMultiplier(plant.mods)), mods: plant.mods.slice() };
+    FP.addXp(state, FP.HARVEST_XP[seed.rarity]);
     state.harvest.push(item);
     state.stats.harvested++;
     state.stats.byRarity[seed.rarity]++;
@@ -88,10 +89,12 @@
     });
     state.coins += coins;
     state.stats.earned += coins;
+    state.stats.runEarned += coins;
+    state.stats.runEarned += coins;
     return { count, coins };
   };
 
-  FP.sellPrice = (state, item) => Math.round(item.value * (1 + 0.05 * FP.upgradeLevel(state, "stall")));
+  FP.sellPrice = (state, item) => Math.round(item.value * (1 + 0.05 * FP.upgradeLevel(state, "stall")) * (1 + 0.1 * FP.skillLevel(state, "haggler")));
 
   const groupKey = item => item.seedId + "|" + item.mods.slice().sort().join(",");
 
@@ -139,7 +142,11 @@
     return Math.round(400 * Math.pow(2.4, done) / 10) * 10;
   };
 
+  FP.expansionsDone = state => (state.cols - FP.START.cols) + (state.rows - FP.START.rows);
+  FP.expandLevel = state => FP.EXPAND_LEVEL[FP.expansionsDone(state)] || 1;
+
   FP.expand = function (state) {
+    if (FP.level(state) < FP.expandLevel(state)) return "The next expansion unlocks at level " + FP.expandLevel(state) + ".";
     const next = FP.nextFarmSize(state);
     if (!next) return "Your farm is already as big as it can get.";
     const cost = FP.expansionCost(state);
@@ -158,9 +165,10 @@
       const rarity = FP.RARITIES[seed.rarity];
       const shelf = FP.upgradeLevel(state, "shelf");
       const chance = Math.min(1, rarity.stockChance * (1 + 0.15 * shelf));
+      if (!FP.seedUnlocked(state, seed)) return;
       // Carrots are always in stock so a player can never get stuck without anything to buy.
       if (seed.id === "carrot" || Math.random() < chance) {
-        state.shop.stock.push({ seedId: seed.id, left: FP.randInt(rarity.stock[0], rarity.stock[1]) + shelf });
+        state.shop.stock.push({ seedId: seed.id, left: FP.randInt(rarity.stock[0], rarity.stock[1]) + shelf + FP.skillLevel(state, "bulk") });
       }
     });
     state.shop.nextRefresh = now + FP.SHOP_REFRESH_MS;
@@ -169,8 +177,8 @@
   // Tools restock on their own timer. The Watering Can is always there.
   FP.refreshToolShop = function (state, now) {
     state.toolShop.stock = FP.TOOLS
-      .filter(t => Math.random() < t.stockChance)
-      .map(t => ({ id: t.id, left: FP.randInt(t.stockMin, t.stockMax) }));
+      .filter(t => FP.toolUnlocked(state, t.id) && Math.random() < t.stockChance)
+      .map(t => ({ id: t.id, left: FP.randInt(t.stockMin, t.stockMax) + FP.skillLevel(state, "bulk") }));
     state.toolShop.nextRefresh = now + FP.TOOL_REFRESH_MS;
   };
 
@@ -214,7 +222,7 @@
   };
 
   // Grow times are multiplied by this when a seed is planted or regrows.
-  FP.growthFactor = state => 1 - 0.05 * FP.upgradeLevel(state, "soil");
+  FP.growthFactor = state => (1 - 0.05 * FP.upgradeLevel(state, "soil")) * (1 - 0.05 * FP.skillLevel(state, "thumb"));
 
   // ---------- Modifiers ----------
 
@@ -256,7 +264,7 @@
   // The plant remembers which one so the game can celebrate it once.
   FP.rollLucky = function (state, plant) {
     for (const id of ["prismatic", "golden"]) {
-      if (!plant.mods.includes(id) && Math.random() < FP.MODS[id].chance) {
+      if (!plant.mods.includes(id) && Math.random() < FP.MODS[id].chance * (1 + 0.5 * FP.skillLevel(state, "lucky"))) {
         FP.addMod(state, plant, id);
         plant.luckyNew = id;
         return id;
@@ -270,9 +278,10 @@
   FP.currentWeather = state => FP.WEATHER_BY_ID[state.weather.id];
 
   // Only weathers that can start at this time of day are in the running.
-  function pickWeather(now) {
+  function pickWeather(state, now) {
     const time = FP.timeOfDay(now).id;
-    const options = FP.WEATHER.filter(w => w.weight > 0 && (w.times === "all" || w.times.includes(time)));
+    const options = FP.WEATHER.filter(w => w.weight > 0 && FP.weatherUnlocked(state, w.id) && (w.times === "all" || w.times.includes(time)));
+    if (!options.length) return FP.WEATHER_BY_ID.clear;
     let roll = Math.random() * options.reduce((sum, w) => sum + w.weight, 0);
     for (const w of options) {
       roll -= w.weight;
@@ -284,8 +293,8 @@
   // Clear skies come between every other kind of weather.
   FP.nextWeather = function (state, now) {
     const wasClear = state.weather.id === "clear";
-    const next = wasClear ? pickWeather(now) : FP.WEATHER_BY_ID.clear;
-    const [lo, hi] = wasClear ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
+    const next = wasClear ? pickWeather(state, now) : FP.WEATHER_BY_ID.clear;
+    const [lo, hi] = next.mod ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
     state.weather = { id: next.id, endsAt: now + FP.randInt(lo, hi) * 1000 };
     return next;
   };
@@ -294,7 +303,7 @@
   FP.nightTick = function (state, now, onChange) {
     if (!FP.isNight(now)) return;
     state.plots.forEach((row, y) => row.forEach((plant, x) => {
-      if (!plant || Math.random() >= FP.NIGHT_CHANCE) return;
+      if (!plant || Math.random() >= FP.NIGHT_CHANCE * (1 + FP.skillLevel(state, "owl"))) return;
       const result = FP.addMod(state, plant, "moonlit");
       if (result) onChange(x, y, plant, "moonlit", result);
     }));
@@ -305,7 +314,7 @@
   FP.weatherTick = function (state, onChange) {
     const weather = FP.currentWeather(state);
     if (!weather.mod) return;
-    const chance = FP.WEATHER_CHANCE * (1 + 0.25 * FP.upgradeLevel(state, "vane"));
+    const chance = FP.WEATHER_CHANCE * (1 + 0.25 * FP.upgradeLevel(state, "vane")) * (1 + 0.2 * FP.skillLevel(state, "storm"));
     state.plots.forEach((row, y) => row.forEach((plant, x) => {
       if (!plant || Math.random() >= chance) return;
       const result = FP.addMod(state, plant, weather.mod);

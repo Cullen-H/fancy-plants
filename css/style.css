@@ -640,3 +640,113 @@ html, body {
 /* ---------- Phase 7: clock ---------- */
 .clock-divider { width: 2px; height: 30px; margin: 0 4px; background: rgba(255, 244, 214, 0.25); }
 #clock-icon { width: 34px; height: 34px; }
+
+/* ---------- Phase 8: levels and the black hole ---------- */
+
+.top-left { display: flex; align-items: center; gap: 14px; }
+
+.level-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  font: inherit;
+  color: #fff4d6;
+  background: rgba(74, 45, 22, 0.75);
+  border: 2px solid #4a2d16;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.level-chip:hover { background: rgba(74, 45, 22, 0.95); }
+.level-chip.bump { animation: bump 0.4s ease-out; }
+.level-chip > b {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: #4a2d06;
+  background: radial-gradient(circle at 35% 35%, #ffe680, #f5b82e 70%);
+  border: 2px solid #8a5a06;
+  border-radius: 50%;
+}
+.level-text { display: flex; flex-direction: column; gap: 4px; font-size: 13px; text-align: left; }
+.xp { display: block; width: 90px; height: 6px; background: rgba(0, 0, 0, 0.35); border-radius: 3px; overflow: hidden; }
+.xp i { display: block; height: 100%; width: 0; background: #8be04e; transition: width 0.3s; }
+
+.row.locked { opacity: 0.6; background: #f3e6cf; }
+.row.locked .icon { filter: grayscale(1) brightness(0.9); }
+.lock-note { font-size: 13px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+
+.unlock-list { margin: 6px 0 0; padding: 0; list-style: none; font-size: 14px; }
+.unlock-list li { display: flex; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--edge); }
+.unlock-list li b { flex: none; width: 58px; color: var(--ink-soft); }
+.card.rebirth { background: linear-gradient(135deg, #2a1640, #120a22); border-color: #6b3fd0; color: #f0e6ff; }
+.card.rebirth p { color: #cbb8ee; }
+.btn-void { color: #fff; background: #7b4ae0; box-shadow: 0 3px 0 #4b2a92; }
+.btn-void:active { box-shadow: 0 1px 0 #4b2a92; }
+
+#void { position: absolute; inset: 0; z-index: 20; overflow: hidden; background: #000; }
+#void[hidden] { display: none; }
+#void-canvas { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; }
+#void-lines { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; pointer-events: none; }
+#void-nodes, #void-info, .void-top, #void-lines { transition: opacity 0.6s; }
+#void.intro #void-nodes, #void.intro #void-info, #void.intro .void-top, #void.intro #void-lines { opacity: 0; pointer-events: none; }
+
+.skill {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 118px;
+  padding: 7px 12px;
+  font: inherit;
+  color: #e9defc;
+  background: rgba(20, 10, 40, 0.85);
+  border: 2px solid color-mix(in srgb, var(--branch) 45%, transparent);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.skill b { font-size: 14px; white-space: nowrap; }
+.skill:hover { transform: translate(-50%, -50%) scale(1.06); }
+.skill.owned { border-color: var(--branch); box-shadow: 0 0 14px color-mix(in srgb, var(--branch) 50%, transparent); }
+.skill.ready { color: #fff; }
+.skill.ready::after { content: ""; position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; background: var(--branch); border-radius: 50%; }
+.skill.picked { outline: 3px solid #fff4d6; outline-offset: 2px; }
+.skill-pips { display: flex; gap: 3px; }
+.skill-pips i { width: 9px; height: 5px; background: rgba(255, 255, 255, 0.18); border-radius: 2px; }
+.skill-pips i.on { background: var(--branch); }
+
+.void-top { position: absolute; left: 24px; right: 24px; top: 18px; display: flex; align-items: center; justify-content: space-between; }
+.void-points { font-size: 18px; color: #e9defc; }
+.void-points b { font-family: var(--font-display); font-size: 30px; color: #c9a2ff; margin-right: 4px; }
+#void-rebirths { margin-left: 14px; font-size: 14px; color: #9f8cc4; }
+
+#void-info {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: 560px;
+  padding: 12px 16px;
+  color: #e9defc;
+  background: rgba(20, 10, 40, 0.92);
+  border: 2px solid var(--branch);
+  border-radius: 14px;
+}
+.void-info-head { display: flex; justify-content: space-between; align-items: baseline; }
+.void-info-head b { font-family: var(--font-display); font-size: 19px; color: #fff; }
+.void-info-head span { font-size: 13px; color: #9f8cc4; }
+#void-info p { margin: 6px 0 10px; font-size: 15px; line-height: 1.4; }
+.void-why { margin-left: 10px; font-size: 13px; color: #c9a2ff; }
+.card .bar { height: 8px; margin: 7px 0 4px; background: #ecd7b4; border-radius: 4px; overflow: hidden; }
+.card .bar i { display: block; height: 100%; background: var(--leaf); border-radius: 4px; }
+#toasts { z-index: 30; }
+/* On the black hole screen, messages sit in the empty bottom left corner so they don't cover skills. */
+#void:not([hidden]) ~ #toasts { left: 24px; top: auto; bottom: 24px; transform: none; align-items: flex-start; }
+#void:not([hidden]) ~ #toasts .toast { max-width: 320px; white-space: normal; border-radius: 14px; }

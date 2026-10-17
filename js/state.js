@@ -1,9 +1,9 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 5;
+  const SAVE_VERSION = 6;
 
-  const newStats = () => ({ planted: 0, harvested: 0, earned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
+  const newStats = () => ({ planted: 0, harvested: 0, earned: 0, runEarned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
   FP.newState = function () {
     return {
@@ -26,6 +26,8 @@
       stats: newStats(),
       goalsClaimed: {},                                 // goal id to true
       tutorial: 0,                                      // step of the first time tutorial, or -1 when done
+      xp: 0,                                            // total XP this run; the farm level comes from it
+      rebirth: { count: 0, gmo: 0, earnedGmo: 0, skills: {}, townSeen: false },
     };
   };
 
@@ -60,6 +62,7 @@
   // Each save format change gets a step here that upgrades the old data.
   // Version 2 added modifiers, tools, upgrades, and weather. Version 3 added workers.
   // Version 4 added goals, more stats, and the tutorial. Version 5 added tool and worker restocks.
+  // Version 6 added farm levels and rebirth.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
@@ -148,6 +151,27 @@
     for (const id in d.goalsClaimed || {}) s.goalsClaimed[id] = true;
     // Saves from before the tutorial existed skip it.
     s.tutorial = Math.round(num(d.tutorial, -1));
+
+    // Version 6 added levels. Older farms get XP for the crops they already harvested,
+    // so nobody gets locked out of things they had.
+    if (Number.isFinite(d.xp)) {
+      s.xp = Math.max(0, d.xp);
+    } else {
+      const byRarity = s.stats.byRarity.reduce((sum, n, i) => sum + n * FP.HARVEST_XP[i], 0);
+      s.xp = Math.max(byRarity, s.stats.harvested, s.stats.earned / 20);
+    }
+    if (!st.runEarned) s.stats.runEarned = s.stats.earned;
+    const rb = d.rebirth || {};
+    s.rebirth = {
+      count: Math.max(0, Math.floor(num(rb.count, 0))),
+      gmo: Math.max(0, Math.floor(num(rb.gmo, 0))),
+      earnedGmo: Math.max(0, Math.floor(num(rb.earnedGmo, 0))),
+      skills: {},
+      townSeen: rb.townSeen === true,
+    };
+    for (const id in rb.skills || {}) {
+      if (FP.SKILL_BY_ID[id]) s.rebirth.skills[id] = FP.clamp(Math.floor(num(rb.skills[id], 0)), 0, FP.SKILL_BY_ID[id].max);
+    }
     s.savedAt = num(d.savedAt, 0);
     return s;
   }

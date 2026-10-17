@@ -56,6 +56,8 @@ Phase 6 is mostly done. Sound effects are made in code, so there are no audio fi
 
 Phase 7 is done. The tool shop restocks every 4 minutes and the worker shop every 6, so tools and workers can sell out. A day and night clock runs alongside the weather, and a full day takes 24 real minutes. The farm turns warm at dawn and dusk, gets dark at night, and fireflies come out. Moonlight is no longer a weather. Instead, any plant can become Moonlit at night. Each weather can only start at certain times, so Sunny happens in the day and Blood Moon only at midnight.
 
+Phase 8 is done. The farm has a level from 1 to 20, and harvesting earns XP, with rarer crops giving more. Levels unlock seed rarities, tools, workers, farm expansions, the weather, and the rarest weathers, and the shops show what is still locked. Farms from before this update got a level based on what they had already harvested. At level 12 you can rebirth: the farm spins into a black hole and you get GMO Points, more of them the more coins you earned that run. The black hole screen has a skill tree with four branches (Growth, Market, Luck, and Workers) and twelve skills. The guide, goals, lifetime stats, and skills carry over between runs.
+
 ## Later phases
 
 | Phase | What gets added |

@@ -201,25 +201,50 @@
     },
 
     reset() {
-      if (!window.confirm("Start a new farm? Your current farm, coins, and seeds will be erased.")) return;
+      if (!window.confirm("Start a new farm? Your current farm, coins, seeds, and skills will be erased.")) return;
       FP.clearSave();
-      state = FP.newState();
-      FP.refreshShop(state, Date.now());
-      FP.refreshToolShop(state, Date.now());
-      FP.refreshWorkerShop(state, Date.now());
-      FP.fx.clear();
-      FP.renderer.forget();
-      FP.renderer.clearWorkers();
-      ui.closeBuilding();
-      ui.tool = null;
-      view.carrying = null;
-      lastClaimable = 0;
-      ui.shownCoins = state.coins;
-      ui.els.coinCount.textContent = FP.formatCoins(state.coins);
-      ui.refresh();
-      FP.save(state);
-      tutorial.render();
+      adoptState(FP.newState());
       toast("You have a brand new farm.");
+    },
+
+    rebirth() {
+      if (!FP.canRebirth(state)) return fail("Rebirth unlocks at level " + FP.REBIRTH_LEVEL + ".");
+      const gmo = FP.gmoForRebirth(state);
+      if (!window.confirm("Rebirth now? Your farm, coins, seeds, tools, upgrades, and workers will be lost, and you will get " +
+        gmo + " GMO " + (gmo === 1 ? "Point" : "Points") + ".")) return;
+      // Copy the farm as it looks right now, so it can spin into the hole.
+      const snapshot = document.createElement("canvas");
+      snapshot.width = canvas.width;
+      snapshot.height = canvas.height;
+      snapshot.getContext("2d").drawImage(canvas, 0, 0);
+      FP.sfx("rebirth");
+      const result = FP.rebirth(state, Date.now());
+      adoptState(result.state);
+      FP.blackHole.show(snapshot, result.gmo);
+    },
+
+    voidArrived(d) {
+      FP.sfx("goal");
+      toast("You got " + d.gmo + " GMO " + (d.gmo === 1 ? "Point" : "Points") + ". Spend them on skills around the black hole.", true);
+    },
+
+    openVoid() {
+      FP.blackHole.show(null, 0);
+    },
+
+    closeVoid() {
+      FP.blackHole.hide();
+      ui.refresh();
+    },
+
+    buySkill(d) {
+      const skill = FP.SKILL_BY_ID[d.id];
+      const err = FP.buySkill(state, d.id);
+      if (err) return fail(err);
+      FP.sfx("fusion");
+      toast(skill.name + " is now level " + FP.skillLevel(state, d.id) + ".");
+      FP.blackHole.render();
+      FP.save(state);
     },
   };
 
@@ -509,6 +534,7 @@
     const offY = (window.innerHeight - 720 * scale) / 2;
     stage.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
     FP.renderer.resize(scale * (window.devicePixelRatio || 1));
+    FP.blackHole.resize(scale * (window.devicePixelRatio || 1));
   }
 
   // ---------- Saving ----------
@@ -562,6 +588,47 @@
       ui.refreshTab("guide");
     }
     lastTime = time.id;
+  }
+
+  // Swaps in a new state, after a reset or a rebirth, and clears everything tied to the old one.
+  function adoptState(next) {
+    const now = Date.now();
+    state = next;
+    FP.refreshShop(state, now);
+    FP.refreshToolShop(state, now);
+    FP.refreshWorkerShop(state, now);
+    FP.fx.clear();
+    FP.renderer.forget();
+    FP.renderer.clearWorkers();
+    ui.closeBuilding();
+    ui.tool = null;
+    view.carrying = null;
+    view.pendingDig = null;
+    lastClaimable = -1;
+    lastLevel = FP.level(state);
+    ui.shownCoins = state.coins;
+    ui.els.coinCount.textContent = FP.formatCoins(state.coins);
+    ui.refresh();
+    tutorial.render();
+    FP.save(state);
+  }
+
+  // Celebrates each new farm level and says what it unlocked.
+  let lastLevel = 0;
+  function checkLevel() {
+    const level = FP.level(state);
+    if (lastLevel && level > lastLevel) {
+      const unlocked = FP.UNLOCKS.filter(u => u.level > lastLevel && u.level <= level).map(u => u.text);
+      toast("Level " + level + "!" + (unlocked.length ? " You unlocked " + unlocked.join(", and ") + "." : ""), true);
+      FP.sfx("goal");
+      ui.pulseLevel();
+      ui.refresh();
+      // New unlocks show up in the shops right away.
+      FP.refreshShop(state, Date.now());
+      FP.refreshToolShop(state, Date.now());
+      FP.refreshWorkerShop(state, Date.now());
+    }
+    lastLevel = level;
   }
 
   // Lets the player know when a goal is ready to claim.
@@ -661,6 +728,7 @@
     updateTime(now);
     tutorial.tick(now);
     checkGoals();
+    checkLevel();
     FP.runWorkers(state, now, onWorkerEvent);
     announceLucky();
     if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
@@ -670,6 +738,7 @@
     updateHeld();
     ui.tick(now, dt);
     FP.renderer.draw(state, now, dt, view);
+    FP.blackHole.draw(now);
     requestAnimationFrame(frame);
   }
 
@@ -689,6 +758,8 @@
   nextWeatherTick = startNow + FP.WEATHER_TICK_MS;
   ui.init(game);
   tutorial.init(game);
+  FP.blackHole.init(game);
+  lastLevel = FP.level(state);
 
   if (firstVisit) {
     ui.tool = { type: "seed", seedId: "carrot" };

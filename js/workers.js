@@ -26,6 +26,7 @@
 
   FP.workerRange = b => stat(b, workerDef(b).range);
   FP.workerEvery = b => stat(b, workerDef(b).every);
+  FP.workerSpeed = state => 1 - 0.1 * FP.skillLevel(state, "hustle"); // Hard Workers shortens the wait
 
   // Pushes a growing plant closer to ripe. Returns false if it was already ripe.
   FP.growBy = function (plant, share, now) {
@@ -44,7 +45,10 @@
 
   // Workers come and go. Each restock rolls who is looking for work.
   FP.refreshWorkerShop = function (state, now) {
-    state.workerShop.stock = FP.WORKERS.filter(w => Math.random() < w.stockChance).map(w => ({ id: w.id, left: 1 }));
+    const board = 1 + 0.3 * FP.skillLevel(state, "jobboard");
+    state.workerShop.stock = FP.WORKERS
+      .filter(w => FP.workerUnlocked(state, w.id) && Math.random() < w.stockChance * (w.rarity >= 2 ? board : 1))
+      .map(w => ({ id: w.id, left: 1 }));
     state.workerShop.nextRefresh = now + FP.WORKER_REFRESH_MS;
   };
 
@@ -154,7 +158,7 @@
   // so a building that was waiting a long time does one job, not hundreds.
   FP.runWorkers = function (state, now, onEvent) {
     for (const b of state.buildings) {
-      if (now - b.lastWork < FP.workerEvery(b) * 1000) continue;
+      if (now - b.lastWork < FP.workerEvery(b) * 1000 * FP.workerSpeed(state)) continue;
       b.lastWork = now;
       WORK[b.workerId](state, b, now).forEach(event => onEvent(b, event));
     }

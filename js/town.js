@@ -372,7 +372,7 @@
             <button class="btn" data-back="pick">Give another crop</button>` : ""}`;
       }
     }
-    town.modalEl.innerHTML = `<div class="modal-box ${m.id}">
+    town.modalEl.innerHTML = `<div class="modal-box modal-${m.id}">
         <div class="modal-head"><h2>${m.id === "casino" ? "Casino" : "Weather Station"}</h2><button class="modal-close" data-close>Close</button></div>
         ${body}
       </div>`;
@@ -452,8 +452,8 @@
     return total;
   }
   const cardHTML = (c, hidden) => hidden
-    ? `<span class="card back"></span>`
-    : `<span class="card ${c.s === "♥" || c.s === "♦" ? "red" : ""}">${c.r}<i>${c.s}</i></span>`;
+    ? `<span class="pcard back"></span>`
+    : `<span class="pcard ${c.s === "♥" || c.s === "♦" ? "red" : ""}">${c.r}<i>${c.s}</i></span>`;
 
   const SLOT_SYMBOLS = ["carrot", "tomato", "pumpkin", "corn", "starfruit", "moonflower"];
 

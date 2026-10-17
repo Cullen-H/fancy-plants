@@ -21,7 +21,8 @@
   FP.NIGHT_CHANCE = 0.02; // chance per plant per weather tick to become Moonlit at night
 
   // Hour of the game day as a decimal, from 0 up to 24.
-  FP.gameHour = now => (now / FP.GAME_HOUR_MS) % 24;
+  // devHourOffset is only set by the test tools in dev.js.
+  FP.gameHour = now => (now / FP.GAME_HOUR_MS + (FP.devHourOffset || 0)) % 24;
 
   FP.timeOfDay = function (now) {
     const h = FP.gameHour(now);

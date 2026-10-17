@@ -15,3 +15,9 @@ Click a seed in the bar at the bottom, then click an empty plot to plant it. Cli
 The number keys 1 to 9 pick items from the bar, Q picks the shovel, H harvests everything that's ripe, and Esc puts down whatever you're holding.
 
 On a phone, hold it sideways. Tapping a plant shows when it will be ready.
+
+## Testing
+
+Add `?dev` to the end of the address, like `https://cullen-h.github.io/fancy-plants/?dev`, and a red Test tools button shows up in the bottom left corner. It can add coins, jump the farm to any level, ripen every plant, fill the basket, restock the shops, hand out tools and workers, add GMO Points, replay the Town cutscene, and set the weather or the time of day.
+
+The test tools change your real save. Use a browser or device you don't mind messing up, or use Reset farm in the options when you're done.

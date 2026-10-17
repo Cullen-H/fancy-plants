@@ -239,6 +239,14 @@
       maybeStartTownIntro(1000);
     },
 
+    // Test tools only: puts the sign away so the cutscene can play again.
+    replayTownIntro() {
+      if (FP.town.open) actions.closeTown();
+      state.rebirth.townSeen = false;
+      state.rebirth.townVisited = false;
+      maybeStartTownIntro(800);
+    },
+
     openTown() {
       if (FP.renderer.introRunning()) return;
       state.rebirth.townVisited = true;

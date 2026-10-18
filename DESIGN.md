@@ -82,6 +82,14 @@ Phase 9 is done. A second after you leave the black hole for the first time, a l
 
 **Weather Station.** You hand the weatherman a harvested plant, and he picks the next weather. A rarer, more valuable plant makes a rare weather more likely, but he decides which one.
 
+### Phases 10 to 12
+
+| Phase | What gets added |
+|---|---|
+| 10 | GMO skills for a bigger max farm, and farm floors. Floor 2 and Floor 3 are GMO skills, up and down arrows beside the farm switch between them, and each floor is a full layer of plots the same size as the farm. Buildings only help plants on their own floor, and weather reaches every floor. |
+| 11 | The Seed Shop in Town. Each special seed has its own quest, and finishing the quest puts that seed on sale. Special seeds include plants that need a certain tile, plants that need fertilizer, plants that take several tiles, and plants that need a set temperature or humidity. The Seed Shop also sells tile kits that turn a plot into a special tile wherever you choose. This phase also adds the Green House, a building that takes one tile and opens a 3 by 3 grid with temperature and humidity controls, and the Picket Fence, which stops the Picker from harvesting the plant it surrounds and wraps the whole plant when that plant takes several tiles. |
+| 12 | The Request Board in Town. Townsfolk ask for specific crops, and handing one over pays the crop's value times a multiplier. Harder requests, such as a crop with a certain modifier, have bigger multipliers. |
+
 Fusions will live in one table that lists two inputs and a result. That replaces the long chain of if statements from the original, and adding a fusion becomes one new line.
 
 ## Workers (Phase 4)

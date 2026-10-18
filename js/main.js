@@ -262,6 +262,25 @@
       ui.refresh();
     },
 
+    // A crop harvested somewhere other than a farm plot, like the Green House.
+    cropHarvested(d) {
+      const seed = FP.SEED_BY_ID[d.seedId];
+      FP.sfx("harvest");
+      FP.fx.burst(Number(d.x), Number(d.y), seed.color, 10);
+      FP.fx.fly({
+        from: { x: Number(d.x), y: Number(d.y) }, to: FP.renderer.centerOf(document.querySelector('#tabs [data-tab="sell"]')),
+        dur: 0.75, lift: 120, draw: FP.drawIcon(seed), size: 1, endSize: 0.45,
+        onArrive: () => { ui.pulseTab("sell"); ui.refreshTab("sell"); },
+      });
+      tutorial.on("harvest");
+    },
+
+    openGreenhouse(d) {
+      ui.closeBuilding();
+      FP.greenhouseMenu.show(d.uid);
+      FP.sfx("click");
+    },
+
     openTown() {
       if (FP.renderer.introRunning()) return;
       state.rebirth.townVisited = true;
@@ -319,7 +338,11 @@
   function useCell(cell, isDrag) {
     const now = Date.now();
     const { x, y } = cell;
-    const plant = state.plots[y][x];
+    // Big plants cover several plots, so any of them counts as clicking the plant.
+    // ax and ay are the plot the plant is stored on.
+    const occ = FP.occupantAt(state, x, y);
+    const plant = occ ? occ.plant : null;
+    const ax = occ ? occ.x : x, ay = occ ? occ.y : y;
     const tool = ui.tool;
     const building = FP.buildingAt(state, x, y);
 
@@ -346,18 +369,41 @@
     }
     if (ui.selected && !isDrag) ui.closeBuilding();
 
+    if (tool && tool.type === "tile") {
+      if (isDrag && !FP.isFree(state, x, y)) return;
+      const err = FP.applyTile(state, tool.id, x, y);
+      if (err) return isDrag ? null : fail(err);
+      const r = FP.plotRect(FP.layout(state), x, y);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s / 2, FP.TILES[tool.id].color, 12, 0.7);
+      FP.sfx(tool.id === "water" ? "splash" : "dig");
+      if (!state.tileKits[tool.id]) ui.tool = null;
+      ui.renderHotbar();
+      return;
+    }
+
+    if (tool && tool.type === "fence") {
+      if (isDrag) return;
+      const err = FP.placeFence(state, x, y);
+      if (err) return fail(err);
+      FP.sfx("dig");
+      toast("The Picker will leave this " + FP.SEED_BY_ID[plant.seedId].name + " alone now.");
+      if (!state.fences) ui.tool = null;
+      ui.renderHotbar();
+      return;
+    }
+
     if (tool && tool.type === "shovel") {
-      if (!isDrag) dig(x, y, plant, now);
+      if (!isDrag) dig(ax, ay, plant, now);
       return;
     }
 
     if (tool && tool.type === "tool") {
-      useTool(tool.toolId, x, y, plant, now, isDrag);
+      useTool(tool.toolId, ax, ay, plant, now, isDrag);
       return;
     }
 
     if (plant) {
-      if (harvestAt(x, y, now)) {
+      if (harvestAt(ax, ay, now)) {
         ui.refreshTab("sell");
         tutorial.on("harvest");
       }
@@ -424,7 +470,10 @@
       if (!isDrag) fail(res.error);
       return;
     }
-    if (def.grow) {
+    if (res.fed) {
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.5, "#c9a26b", 14, 0.8);
+      toast("The " + FP.SEED_BY_ID[plant.seedId].name + " has what it needs and started growing.");
+    } else if (def.grow) {
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, id === "can" ? "#6fb7ff" : "#c9a26b", 9, 0.7);
     } else {
       celebrateMod(x, y, plant, res.modId, res.result);
@@ -468,6 +517,12 @@
   function dig(x, y, plant, now) {
     if (!plant) return toast("There's nothing planted here.");
     const seed = FP.SEED_BY_ID[plant.seedId];
+    // A fence comes down first, and goes back in the bar.
+    if (FP.removeFence(state, plant)) {
+      FP.sfx("dig");
+      ui.renderHotbar();
+      return toast("You took the fence down. Click again with the shovel to dig up the " + seed.name + ".");
+    }
     const p = view.pendingDig;
     if (p && p.x === x && p.y === y && now < p.until) {
       FP.digUp(state, x, y);
@@ -509,6 +564,8 @@
     } else if (tool.type === "shovel") src = FP.shovelIconURL();
     else if (tool.type === "tool") src = FP.toolIconURL(FP.TOOL_BY_ID[tool.toolId]);
     else if (tool.type === "building") src = FP.buildingIconURL(FP.WORKER_BY_ID[tool.workerId]);
+    else if (tool.type === "tile") src = FP.tileIconURL(tool.id);
+    else if (tool.type === "fence") src = FP.fenceIconURL();
     else src = FP.seedIconURL(FP.SEED_BY_ID[tool.seedId]);
     if (src !== heldSrc) {
       held.src = src;
@@ -561,7 +618,8 @@
 
   window.addEventListener("keydown", e => {
     if (e.key === "Escape") {
-      if (FP.town.modal) FP.town.closeModal();
+      if (FP.greenhouseMenu.open) FP.greenhouseMenu.hide();
+      else if (FP.town.modal) FP.town.closeModal();
       else if (FP.town.open) actions.closeTown();
       ui.setTool(null);
       ui.closeBuilding();
@@ -601,6 +659,7 @@
   let last = performance.now();
   let nextCheck = 0;
   let nextWeatherTick = 0;
+  let nextGreenhouse = 0;
   let weatherChanged = 0; // plants the current weather has changed, for the message when it ends
 
   function updateWeather(now) {
@@ -666,6 +725,7 @@
     FP.renderer.forget();
     FP.renderer.clearWorkers();
     ui.closeBuilding();
+    FP.greenhouseMenu.hide();
     ui.tool = null;
     view.carrying = null;
     view.pendingDig = null;
@@ -793,6 +853,11 @@
 
       updateWeather(now);
       updateTime(now);
+      if (now >= nextGreenhouse) {
+        nextGreenhouse = now + 1000;
+        FP.greenhouseTick(state, now);
+        FP.greenhouseMenu.tick();
+      }
       tutorial.tick(now);
       checkGoals();
       checkLevel();
@@ -832,6 +897,7 @@
   tutorial.init(game);
   FP.blackHole.init(game);
   FP.town.init(game);
+  FP.greenhouseMenu.init(game);
   maybeStartTownIntro(2500); // for farms that rebirthed before the Town existed
   lastLevel = FP.level(state);
 

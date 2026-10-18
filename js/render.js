@@ -701,7 +701,49 @@
     outlinedFill(ctx, extra || "#bfe6ff", 1.5);
   }
 
+  // A glass house. Plants inside show through the panes as colored dots.
+  function greenhouse(ctx, r, t, b) {
+    const s = r.s, x = r.x + s * 0.12, w = s * 0.76, base = r.y + s * 0.9, h = s * 0.42;
+    ctx.beginPath();
+    ctx.ellipse(r.x + s / 2, base + 2, w * 0.6, s * 0.06, 0, 0, TAU);
+    ctx.fillStyle = "rgba(40,20,8,0.3)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x, base);
+    ctx.lineTo(x, base - h);
+    ctx.lineTo(x + w / 2, base - h - s * 0.22);
+    ctx.lineTo(x + w, base - h);
+    ctx.lineTo(x + w, base);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(190,235,255,0.75)";
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#f4f7f8";
+    ctx.stroke();
+    if (b && b.inner) {
+      b.inner.plots.forEach((p, i) => {
+        if (!p) return;
+        ctx.beginPath();
+        ctx.arc(x + w * (0.22 + (i % 3) * 0.28), base - h * (0.2 + Math.floor(i / 3) * 0.28), s * 0.04, 0, TAU);
+        ctx.fillStyle = FP.isRipe(p, Date.now()) ? FP.SEED_BY_ID[p.seedId].color : "#5cb84a";
+        ctx.fill();
+      });
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 1; i < 3; i++) { ctx.moveTo(x + w * i / 3, base); ctx.lineTo(x + w * i / 3, base - h); }
+    ctx.moveTo(x, base - h / 2); ctx.lineTo(x + w, base - h / 2);
+    ctx.moveTo(x + w / 2, base - h); ctx.lineTo(x + w / 2, base - h - s * 0.22);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.3, base - h * 0.75, s * 0.06, s * 0.02, -0.6, 0, TAU);
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.fill();
+  }
+
   const BUILDINGS = {
+    greenhouse,
     waterer(ctx, r) {
       house(ctx, r, "#4b8bff", "#e9d9bd");
       // A little bucket by the door
@@ -889,7 +931,7 @@
     for (const b of state.buildings) {
       if (b.y !== y) continue;
       const r = FP.plotRect(L, b.x, b.y);
-      BUILDINGS[b.workerId](ctx, r, t);
+      BUILDINGS[b.workerId](ctx, r, t, b);
       levelPips(ctx, b, r);
       // Hive bees that are home circle the hive.
       if (b.workerId === "beekeeper") {
@@ -1200,15 +1242,45 @@
     ctx.fillText(line2, x + 13, y + 41);
   }
 
+  // A two line tooltip with a title and one note.
+  function drawSimpleTooltip(ctx, view, title, note, color) {
+    ctx.font = fontBold();
+    let w = ctx.measureText(title).width;
+    ctx.font = fontText();
+    w = Math.max(w, ctx.measureText(note).width) + 26;
+    const h = 52;
+    const x = FP.clamp(view.mouse.x + 18, 4, FARM.x + FARM.w - w);
+    const y = FP.clamp(view.mouse.y + 18, 70, H - 96 - h);
+    FP.roundRect(ctx, x, y, w, h, 10);
+    ctx.fillStyle = "rgba(43,29,18,0.94)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.font = fontBold();
+    ctx.fillStyle = FP.shade(color, 0.35);
+    ctx.fillText(title, x + 13, y + 22);
+    ctx.font = fontText();
+    ctx.fillStyle = "#f3e6d0";
+    ctx.fillText(note, x + 13, y + 41);
+  }
+
   function drawTooltip(ctx, state, view, now, t) {
     if (!view.hover || !view.mouse) return;
     const b = FP.buildingAt(state, view.hover.x, view.hover.y);
     if (b) return view.selected === b.uid ? null : drawBuildingTooltip(ctx, b, view);
-    const plant = state.plots[view.hover.y][view.hover.x];
-    if (!plant) return;
+    const occ = FP.occupantAt(state, view.hover.x, view.hover.y);
+    if (!occ) {
+      const tile = FP.tileAt(state, view.hover.x, view.hover.y);
+      return tile ? drawSimpleTooltip(ctx, view, FP.TILES[tile].name, tile === "water" ? "Only water plants grow here." : "Anything can grow here.", "#c9a26b") : null;
+    }
+    const plant = occ.plant;
     const seed = FP.SEED_BY_ID[plant.seedId];
     const rarity = FP.RARITIES[seed.rarity];
-    const status = FP.isRipe(plant, now) ? "Ready to harvest" : "Ready in " + FP.formatTime(FP.timeLeft(plant, now));
+    let status = plant.needsFeed ? "Needs Fertilizer to start growing"
+      : FP.isRipe(plant, now) ? "Ready to harvest" : "Ready in " + FP.formatTime(FP.timeLeft(plant, now));
+    if (plant.fenced) status += ", fenced in";
     const worth = FP.sellPrice(state, { value: Math.round(seed.value * FP.modMultiplier(plant.mods)) });
     const worthText = "Sells for " + FP.formatCoins(worth);
 
@@ -1308,6 +1380,8 @@
     const carrying = view.carrying;
     const isHover = (x, y) => view.hover && view.hover.x === x && view.hover.y === y;
 
+    drawTiles(ctx, state, L, t);
+
     // The range of the selected or hovered building shows on the soil.
     const hoveredBuilding = view.hover && FP.buildingAt(state, view.hover.x, view.hover.y);
     const shownBuilding = state.buildings.find(b => b.uid === view.selected) || hoveredBuilding;
@@ -1326,13 +1400,17 @@
         }
         const building = FP.buildingAt(state, x, y);
         if (building && (view.selected === building.uid || hovered)) plotOutline(ctx, r, "#fff3a0");
-        else if (hovered && tool && tool.type === "building" && !plant && !building) plotOutline(ctx, r, "#8be04e");
+        else if (hovered && tool && tool.type === "building" && FP.isFree(state, x, y)) plotOutline(ctx, r, "#8be04e");
         else if (carrying && carrying.x === x && carrying.y === y) plotOutline(ctx, r, "#7fd3ff");
         else if (carrying && hovered && !plant) plotOutline(ctx, r, "#7fd3ff");
         else if (view.pendingDig && view.pendingDig.x === x && view.pendingDig.y === y) plotOutline(ctx, r, "#e5533d");
         else if (hovered && tool && tool.type === "shovel" && plant) plotOutline(ctx, r, "#e5533d");
         else if (hovered && tool && tool.type === "tool" && toolFits(state, tool, plant, now)) plotOutline(ctx, r, "#8be04e");
-        else if (hovered && plant && FP.isRipe(plant, now)) plotOutline(ctx, r, "#fff3a0");
+        else if (hovered && plant && FP.isRipe(plant, now)) plotOutline(ctx, plantRect(L, x, y, plant), "#fff3a0");
+        else if (hovered && !plant && FP.occupantAt(state, x, y)) {
+          const occ = FP.occupantAt(state, x, y);
+          plotOutline(ctx, plantRect(L, occ.x, occ.y, occ.plant), FP.isRipe(occ.plant, now) ? "#fff3a0" : "rgba(255,240,210,0.6)");
+        }
       }
     }
 
@@ -1340,14 +1418,16 @@
     for (let y = 0; y < state.rows; y++) {
       for (let x = 0; x < state.cols; x++) {
         const plant = state.plots[y][x];
-        const r = FP.plotRect(L, x, y);
+        const r = plant ? plantRect(L, x, y, plant) : FP.plotRect(L, x, y);
         if (plant) {
           const { stage } = FP.growStage(plant, now);
           const popAt = trackStage(x, y, plant, stage, r, now);
           const lifted = carrying && carrying.x === x && carrying.y === y;
+          if (plant.fenced) drawFence(ctx, r, true);
           if (lifted) ctx.globalAlpha = 0.45;
           drawPlantAt(ctx, plant, r, now, t, x * 7.3 + y * 3.1, popAt);
           ctx.globalAlpha = 1;
+          if (plant.fenced) drawFence(ctx, r, false);
           // Plants with modifiers give off a little sparkle in their colors now and then.
           if (plant.mods.length && !FP.settings.calm && Math.random() < dt * 0.8) {
             const id = plant.mods[Math.floor(Math.random() * plant.mods.length)];
@@ -1355,7 +1435,7 @@
           }
         } else {
           delete memory[x + "," + y];
-          if (isHover(x, y) && tool && tool.type === "seed" && !FP.buildingAt(state, x, y)) {
+          if (isHover(x, y) && tool && tool.type === "seed" && FP.isFree(state, x, y)) {
             ctx.save();
             ctx.globalAlpha = 0.5;
             ctx.translate(r.x + r.s / 2, r.y + r.s * 0.74);
@@ -1390,8 +1470,9 @@
       for (let x = 0; x < state.cols; x++) {
         const plant = state.plots[y][x];
         if (!plant) continue;
-        const r = FP.plotRect(L, x, y);
-        drawStatus(ctx, plant, r, now, t, x * 7.3 + y * 3.1);
+        const r = plantRect(L, x, y, plant);
+        if (plant.needsFeed) drawNeedsFeed(ctx, r, t);
+        else drawStatus(ctx, plant, r, now, t, x * 7.3 + y * 3.1);
         drawModPips(ctx, plant, r, t);
       }
     }
@@ -1406,6 +1487,109 @@
 
     firstFrame = false;
   };
+
+  // ---------- Special tiles, big plants, and fences ----------
+
+  function drawTiles(ctx, state, L, t) {
+    if (!state.tiles) return;
+    for (let y = 0; y < state.rows; y++) {
+      for (let x = 0; x < state.cols; x++) {
+        const tile = state.tiles[y][x];
+        if (!tile) continue;
+        const r = FP.plotRect(L, x, y);
+        FP.roundRect(ctx, r.x + 3, r.y + 3, r.s - 6, r.s - 6, r.s * 0.1);
+        if (tile === "sand") {
+          ctx.fillStyle = "#ecd59a";
+          ctx.fill();
+          const rand = FP.rng(x * 31 + y * 7 + 3);
+          ctx.fillStyle = "rgba(170,130,70,0.45)";
+          for (let i = 0; i < 14; i++) {
+            ctx.beginPath();
+            ctx.arc(r.x + 8 + rand() * (r.s - 16), r.y + 8 + rand() * (r.s - 16), 1.2, 0, TAU);
+            ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = "#4f9fe0";
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "#8a7a60";
+          ctx.stroke();
+          const k = (t * 0.5 + (x + y) * 0.3) % 1;
+          ctx.beginPath();
+          ctx.ellipse(r.x + r.s / 2, r.y + r.s / 2, r.s * (0.1 + 0.25 * k), r.s * (0.05 + 0.12 * k), 0, 0, TAU);
+          ctx.strokeStyle = `rgba(255,255,255,${0.5 * (1 - k)})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // The area a plant covers: one plot, or a square of plots for big plants.
+  function plantRect(L, x, y, plant) {
+    const r = FP.plotRect(L, x, y);
+    const size = FP.plantSize(plant);
+    if (size > 1) r.s = size * L.size + (size - 1) * L.gap;
+    return r;
+  }
+  FP.plantRect = plantRect;
+
+  // Pickets around a plant. back draws the far side, which sits behind the plant.
+  function drawFence(ctx, r, back) {
+    const m = 4, x0 = r.x - m, y0 = r.y - m, x1 = r.x + r.s + m, y1 = r.y + r.s + m;
+    const picket = (x, y, h) => {
+      ctx.beginPath();
+      ctx.moveTo(x - 3, y);
+      ctx.lineTo(x - 3, y - h);
+      ctx.lineTo(x, y - h - 4);
+      ctx.lineTo(x + 3, y - h);
+      ctx.lineTo(x + 3, y);
+      ctx.closePath();
+      ctx.fillStyle = "#fbf6ea";
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = "#8a7a60";
+      ctx.stroke();
+    };
+    const rail = (ax, ay, bx, by) => {
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#e8dfcc";
+      ctx.stroke();
+    };
+    const h = 14;
+    if (back) {
+      rail(x0, y0 - 6, x1, y0 - 6);
+      for (let x = x0; x <= x1 + 0.1; x += (x1 - x0) / Math.max(3, Math.round((x1 - x0) / 14))) picket(x, y0, h);
+      return;
+    }
+    rail(x0, y1 - 6, x1, y1 - 6);
+    for (const sx of [x0, x1]) {
+      for (let y = y0 + 12; y <= y1; y += (y1 - y0) / Math.max(3, Math.round((y1 - y0) / 16))) picket(sx, y, h);
+    }
+    for (let x = x0; x <= x1 + 0.1; x += (x1 - x0) / Math.max(3, Math.round((x1 - x0) / 14))) picket(x, y1, h);
+  }
+
+  // A small bubble over a plant that needs Fertilizer.
+  let fertilizerIcon = null;
+  function drawNeedsFeed(ctx, r, t) {
+    if (!fertilizerIcon) {
+      fertilizerIcon = new Image();
+      fertilizerIcon.src = FP.toolIconURL(FP.TOOL_BY_ID.fertilizer);
+    }
+    const bob = Math.sin(t * 3) * 2;
+    const cx = r.x + r.s * 0.78, cy = r.y + r.s * 0.18 + bob, rad = Math.max(10, r.s * 0.15);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, TAU);
+    ctx.fillStyle = "#fffbe9";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#c9a26b";
+    ctx.stroke();
+    if (fertilizerIcon.complete) ctx.drawImage(fertilizerIcon, cx - rad * 0.8, cy - rad * 0.8, rad * 1.6, rad * 1.6);
+  }
 
   // Switching floors slides the new floor in from above or below.
   let slideStart = 0, slideDir = 0;

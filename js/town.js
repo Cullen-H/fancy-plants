@@ -60,7 +60,7 @@
   const FOUNTAIN = { x: 640, y: 425 };
 
   const BUILDINGS = [
-    { id: "soon1",   name: "Coming Soon",     cx: 370,  base: 292, dw: 200, dh: 220, k: 0.72, open: false },
+    { id: "seedshop", name: "Seed Shop",      cx: 370,  base: 292, dw: 220, dh: 220, k: 0.72, open: true },
     { id: "casino",  name: "Casino",          cx: 655,  base: 272, dw: 320, dh: 300, k: 0.62, open: true },
     { id: "weather", name: "Weather Station", cx: 935,  base: 312, dw: 280, dh: 280, k: 0.58, open: true },
     { id: "soon2",   name: "Coming Soon",     cx: 190,  base: 490, dw: 200, dh: 230, k: 0.78, open: false },
@@ -225,6 +225,40 @@
     outlined(ctx, "#2f5f8f");
   }
 
+  function drawSeedShop(ctx, b, t) {
+    const w = b.dw, h = b.dh, top = -h;
+    FP.roundRect(ctx, 0, top, w, h, 8);
+    outlined(ctx, "#6fae5a");
+    // Striped awning
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * w / 8 - 6, top + 54);
+      ctx.lineTo((i + 1) * w / 8 + 6, top + 54);
+      ctx.lineTo((i + 1) * w / 8 + 6, top + 80);
+      ctx.quadraticCurveTo((i + 0.5) * w / 8, top + 92, i * w / 8 - 6, top + 80);
+      ctx.closePath();
+      outlined(ctx, i % 2 ? "#fff4d6" : "#e8412c", 2);
+    }
+    FP.roundRect(ctx, 24, top + 10, w - 48, 38, 8);
+    outlined(ctx, "#fff4d6", 2);
+    ctx.font = "700 26px " + FP.displayFont();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#2f7d32";
+    ctx.fillText("SEEDS", w / 2, top + 39);
+    windowPane(ctx, 20, top + 104, 64, 54, true);
+    // Seed packets in the window
+    ["#f28c28", "#e8412c", "#9b59f0"].forEach((c, i) => {
+      FP.roundRect(ctx, 28 + i * 19, top + 118, 14, 22, 2);
+      outlined(ctx, c, 1.5);
+    });
+    FP.roundRect(ctx, w - 90, -96, 64, 96, 6);
+    outlined(ctx, "#7a4e2d");
+    ctx.beginPath();
+    ctx.arc(w - 36, -48, 4, 0, TAU);
+    ctx.fillStyle = "#ffd23f";
+    ctx.fill();
+  }
+
   function drawSoon(ctx, b) {
     const w = b.dw, h = b.dh, top = -h;
     FP.roundRect(ctx, 0, top, w, h, 6);
@@ -271,6 +305,7 @@
     ctx.fill();
     if (b.id === "casino") drawCasino(ctx, b, t);
     else if (b.id === "weather") drawStation(ctx, b, t);
+    else if (b.id === "seedshop") drawSeedShop(ctx, b, t);
     else drawSoon(ctx, b);
     ctx.restore();
   }
@@ -753,7 +788,9 @@
     const state = town.game.state;
     const m = town.modal;
     let body = "";
-    if (m.id === "fountain") {
+    if (m.id === "seedshop") {
+      body = seedShopBody(state);
+    } else if (m.id === "fountain") {
       body = `<canvas id="wish" class="wish" width="1200" height="680"></canvas>
         <div class="moves"><button class="btn btn-gold" data-toss ${state.coins < 1 ? "disabled" : ""}>Toss a coin</button></div>
         <p class="modal-sub center">Make a wish. Each toss costs one coin.</p>`;
@@ -788,7 +825,7 @@
       }
     }
     town.modalEl.innerHTML = `<div class="modal-box modal-${m.id}">
-        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
+        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain", seedshop: "Seed Shop" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
         ${body}
       </div>`;
     if (m.id === "weather") drawWeatherman(m.step === "spin");
@@ -803,6 +840,7 @@
     if (!el || el.disabled) return;
     if (el.hasAttribute("data-close")) return town.closeModal();
     if (el.dataset.back) { m.step = el.dataset.back; m.result = null; return renderModal(); }
+    if (el.dataset.shop) return seedShopClick(state, el.dataset.shop, el.dataset.id);
     if (el.hasAttribute("data-toss")) {
       if (state.coins < 1) return;
       state.coins -= 1;
@@ -849,6 +887,78 @@
     return `<div class="result ${kind}"><b>${d.text}</b>
       <span>Your crop went from ${coin}${FP.formatCoins(d.before)} to ${coin}${FP.formatCoins(d.after)}.</span></div>
       <button class="btn" data-back="pick">Bet another crop</button>`;
+  }
+
+  // ---------- Seed Shop ----------
+
+  // A short line about what a special seed needs.
+  FP.needsText = function (seed) {
+    const n = seed.needs || {};
+    if (n.tile) return "Has to be planted on " + FP.TILES[n.tile].name.toLowerCase() + ".";
+    if (n.feed) return "Waits as a sprout until you give it Fertilizer.";
+    if (n.size) return "Takes up " + n.size + " by " + n.size + " plots.";
+    if (n.temp !== undefined) return "Only grows in a Green House set to " + FP.TEMPS[n.temp].toLowerCase() + " and " + FP.HUMIDS[n.humid].toLowerCase() + ".";
+    return "";
+  };
+
+  function seedShopBody(state) {
+    const seeds = FP.SPECIAL_SEEDS.map(seed => {
+      const unlocked = FP.specialUnlocked(state, seed.id);
+      const q = FP.QUESTS[seed.id];
+      const have = Math.min(q.count, FP.questItems(state, seed.id).length);
+      const right = unlocked
+        ? `<button class="btn btn-gold ${state.coins < seed.price ? "poor" : ""}" data-shop="seed" data-id="${seed.id}">${coin}${FP.formatCoins(seed.price)}</button>`
+        : `<button class="btn" data-shop="quest" data-id="${seed.id}" ${have < q.count ? "disabled" : ""}>Hand over</button>`;
+      return `<div class="shop-row ${unlocked ? "" : "locked-seed"}" style="--rarity:${FP.RARITIES[seed.rarity].color}">
+        <img src="${FP.seedIconURL(seed)}" alt="">
+        <div class="shop-info"><b>${seed.name}</b><span>${FP.needsText(seed)} Sells for ${FP.formatCoins(seed.value)}.</span>
+          ${unlocked ? "" : `<span class="quest">"${q.text}" You have ${have} of ${q.count}.</span>`}</div>
+        ${right}
+      </div>`;
+    }).join("");
+    const supply = (key, icon, name, desc, price, owned) => `<div class="shop-row">
+        <img src="${icon}" alt="">
+        <div class="shop-info"><b>${name}</b><span>${desc}${owned ? " You have " + owned + "." : ""}</span></div>
+        <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-shop="${key}">${coin}${FP.formatCoins(price)}</button>
+      </div>`;
+    const gh = FP.WORKER_BY_ID.greenhouse;
+    return `<p class="modal-sub">"I keep the unusual seeds back here. Do me a favor and I'll put one on the shelf for you for good."</p>
+      <h3 class="section">Special seeds</h3>${seeds}
+      <h3 class="section">Supplies</h3>
+      ${supply("sand", FP.tileIconURL("sand"), FP.TILES.sand.kit, FP.TILES.sand.desc, FP.TILES.sand.price, state.tileKits.sand)}
+      ${supply("water", FP.tileIconURL("water"), FP.TILES.water.kit, FP.TILES.water.desc, FP.TILES.water.price, state.tileKits.water)}
+      ${supply("fence", FP.fenceIconURL(), "Picket Fence", "Goes around a plant so the Picker leaves it alone. On a big plant it goes around the whole thing.", FP.FENCE_PRICE, state.fences)}
+      ${supply("greenhouse", FP.buildingIconURL(gh), "Green House", gh.desc, FP.GREENHOUSE_PRICE, 0)}`;
+  }
+
+  function seedShopClick(state, kind, id) {
+    let err, msg;
+    if (kind === "quest") {
+      err = FP.turnInQuest(state, id);
+      msg = "The " + FP.SEED_BY_ID[id].name + " is on the shelf now. You can buy its seeds here whenever you like.";
+    } else if (kind === "seed") {
+      err = FP.buySpecialSeed(state, id);
+      msg = "You bought " + FP.withArticle(FP.SEED_BY_ID[id].name) + " seed.";
+    } else if (kind === "sand" || kind === "water") {
+      err = FP.buyTileKit(state, kind);
+      msg = "You bought " + FP.withArticle(FP.TILES[kind].kit) + ". Click an empty plot to use it.";
+    } else if (kind === "fence") {
+      err = FP.buyFence(state);
+      msg = "You bought a Picket Fence. Click a plant to put it around.";
+    } else if (kind === "greenhouse") {
+      err = FP.buyGreenhouse(state);
+      msg = "You bought a Green House. Place it on an empty plot.";
+    }
+    if (err) {
+      FP.sfx("error");
+      town.game.toast(err);
+      return;
+    }
+    FP.sfx(kind === "quest" ? "goal" : "buy");
+    town.game.toast(msg);
+    town.game.action("townChanged", {});
+    FP.ui.renderHotbar();
+    renderModal();
   }
 
   // ---------- Casino games ----------

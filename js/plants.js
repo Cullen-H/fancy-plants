@@ -344,6 +344,102 @@
     },
   };
 
+  // ---------- Special plant shapes ----------
+
+  Object.assign(SHAPES, {
+    // Cactus Pear: a round paddle cactus with pink fruit on top.
+    cactus(ctx, s, stage, seed) {
+      const k = 0.5 + 0.17 * stage;
+      const pad = (x, y, rx, ry, rot) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
+        fillStroke(ctx, "#5aa84a");
+        ctx.fillStyle = "#f3f0d0";
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.cos(i * 2.4) * rx * 0.5, Math.sin(i * 2.4) * ry * 0.6, Math.max(0.8, s * 0.008), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      };
+      pad(0, -s * 0.16 * k, s * 0.12 * k, s * 0.17 * k, 0);
+      if (stage >= 2) {
+        pad(-s * 0.13 * k, -s * 0.3 * k, s * 0.08 * k, s * 0.12 * k, -0.5);
+        pad(s * 0.13 * k, -s * 0.34 * k, s * 0.08 * k, s * 0.12 * k, 0.5);
+      }
+      if (stage === 3) {
+        [[-0.17, -0.44], [0.17, -0.48], [0, -0.33]].forEach(([x, y]) => {
+          ctx.beginPath();
+          ctx.ellipse(x * s * k, y * s * k, s * 0.04, s * 0.05, 0, 0, TAU);
+          fillStroke(ctx, seed.color);
+        });
+      }
+    },
+
+    // Lotus: a lily pad on the water with a pink flower.
+    lotus(ctx, s, stage, seed, t) {
+      const R = s * (0.12 + 0.05 * stage);
+      ctx.beginPath();
+      ctx.ellipse(0, -s * 0.02, R, R * 0.45, 0, 0.25, TAU - 0.25);
+      ctx.lineTo(0, -s * 0.02);
+      ctx.closePath();
+      fillStroke(ctx, "#4caf50");
+      if (stage < 2) return;
+      const open = stage === 3 ? 1 : 0.45;
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 6 - 0.5) * 2.2 * open;
+        leaf(ctx, 0, -s * 0.05, s * (0.1 + 0.05 * open), s * 0.05, a, i % 2 ? seed.color : FP.shade(seed.color, 0.3));
+      }
+      if (stage === 3) ball(ctx, 0, -s * 0.09, s * 0.025, "#ffe14d");
+    },
+
+    // Truffle Root: dark knobbly truffles at the soil with a little sprig.
+    truffle(ctx, s, stage, seed) {
+      leaf(ctx, 0, -s * 0.02, s * (0.08 + 0.04 * stage), s * 0.04, -0.4, LEAF_DARK);
+      leaf(ctx, 0, -s * 0.02, s * (0.07 + 0.04 * stage), s * 0.035, 0.5, LEAF);
+      if (stage < 2) return;
+      const r = s * (stage === 3 ? 0.07 : 0.045);
+      [[-0.1, 0], [0.09, 0.01], [0, -0.04]].forEach(([x, y], i) => {
+        ctx.beginPath();
+        for (let j = 0; j <= 10; j++) {
+          const a = j / 10 * TAU, rr = r * (0.85 + 0.15 * Math.sin(j * 3 + i));
+          ctx.lineTo(x * s + Math.cos(a) * rr, y * s + Math.sin(a) * rr * 0.8);
+        }
+        ctx.closePath();
+        fillStroke(ctx, seed.color);
+      });
+    },
+
+    // Ember Pepper: a curled hot pepper that glows when it's ripe.
+    pepper(ctx, s, stage, seed, t) {
+      const H = s * (0.12 + 0.08 * stage);
+      stem(ctx, 0, 0, 0, -H, s * 0.025);
+      leaf(ctx, 0, -H * 0.4, s * 0.12, s * 0.05, -1.1, LEAF_DARK);
+      leaf(ctx, 0, -H * 0.6, s * 0.12, s * 0.05, 1.1, LEAF);
+      if (stage < 2) return;
+      const ripe = stage === 3;
+      const color = ripe ? seed.color : "#8cc152";
+      if (ripe) {
+        const g = ctx.createRadialGradient(0, -H * 0.7, 0, 0, -H * 0.7, s * 0.3);
+        g.addColorStop(0, FP.rgba(seed.color, 0.35 + 0.15 * Math.sin(t * 3)));
+        g.addColorStop(1, FP.rgba(seed.color, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(-s * 0.3, -H - s * 0.3, s * 0.6, s * 0.6);
+      }
+      [[-1, 0.75], [1, 0.55]].forEach(([side, at]) => {
+        const x = side * s * 0.05, y = -H * at;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x + side * s * 0.1, y + s * 0.05, x + side * s * 0.05, y + s * (ripe ? 0.2 : 0.12));
+        ctx.quadraticCurveTo(x + side * s * 0.02, y + s * 0.06, x, y);
+        fillStroke(ctx, color);
+      });
+    },
+  });
+
   FP.drawPlant = function (ctx, seed, s, stage, t = 0) {
     lw = Math.max(1, s * 0.018);
     ctx.lineJoin = "round";
@@ -481,6 +577,47 @@
       ctx.fillStyle = "#fff3a0";
       [[80, 22, 3], [84, 34, 2.5], [78, 42, 2]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); });
     },
+  };
+
+  FP.tileIconURL = function (kind) {
+    const key = "tile:" + kind;
+    if (iconCache[key]) return iconCache[key];
+    const c = document.createElement("canvas");
+    c.width = c.height = 96;
+    const ctx = c.getContext("2d");
+    lw = 3;
+    FP.roundRect(ctx, 14, 30, 68, 52, 8);
+    fillStroke(ctx, "#a8744a");
+    FP.roundRect(ctx, 22, 24, 52, 44, 8);
+    fillStroke(ctx, FP.TILES[kind].color);
+    if (kind === "water") {
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.ellipse(48, 46, 14, 6, 0, 0, TAU);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "rgba(170,130,70,0.6)";
+      [[34, 38], [52, 34], [60, 52], [40, 54], [48, 46]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 2, 0, TAU); ctx.fill(); });
+    }
+    return (iconCache[key] = c.toDataURL());
+  };
+
+  FP.fenceIconURL = function () {
+    if (iconCache.fence) return iconCache.fence;
+    const c = document.createElement("canvas");
+    c.width = c.height = 96;
+    const ctx = c.getContext("2d");
+    lw = 2.5;
+    [[0, 40], [0, 62]].forEach(([, y]) => { FP.roundRect(ctx, 10, y, 76, 8, 3); fillStroke(ctx, "#e8dfcc"); });
+    for (let i = 0; i < 4; i++) {
+      const x = 18 + i * 20;
+      ctx.beginPath();
+      ctx.moveTo(x - 6, 84); ctx.lineTo(x - 6, 26); ctx.lineTo(x, 16); ctx.lineTo(x + 6, 26); ctx.lineTo(x + 6, 84);
+      ctx.closePath();
+      fillStroke(ctx, "#fbf6ea");
+    }
+    return (iconCache.fence = c.toDataURL());
   };
 
   FP.toolIconURL = function (tool) {

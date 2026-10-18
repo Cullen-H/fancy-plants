@@ -142,6 +142,7 @@
     next.stats = Object.assign({}, state.stats, { runEarned: 0 });
     next.tutorial = -1;
     next.fountain = state.fountain; // the fountain keeps its coins through rebirths
+    next.special = state.special;   // unlocked special seeds stay unlocked
     next.rebirth = {
       count: state.rebirth.count + 1,
       gmo: state.rebirth.gmo + gmo,

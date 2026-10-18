@@ -5,9 +5,11 @@
 
   // Plants store when they were planted and how long they take, so they keep
   // growing while the game is closed.
-  FP.growPercent = (plant, now) => FP.clamp((now - plant.plantedAt) / plant.growMs, 0, 1);
-  FP.isRipe = (plant, now) => now - plant.plantedAt >= plant.growMs;
-  FP.timeLeft = (plant, now) => Math.max(0, plant.plantedAt + plant.growMs - now);
+  // A paused plant is frozen at the moment it paused (see special.js).
+  const clock = (plant, now) => plant.pausedAt || now;
+  FP.growPercent = (plant, now) => FP.clamp((clock(plant, now) - plant.plantedAt) / plant.growMs, 0, 1);
+  FP.isRipe = (plant, now) => clock(plant, now) - plant.plantedAt >= plant.growMs;
+  FP.timeLeft = (plant, now) => Math.max(0, plant.plantedAt + plant.growMs - clock(plant, now));
 
   const STAGE_START = [0, 0.25, 0.6, 1];
 
@@ -26,12 +28,14 @@
     const seed = FP.SEED_BY_ID[seedId];
     if (!seed) return "That seed doesn't exist.";
     if (FP.buildingAt(state, x, y)) return "There's a building on that plot.";
-    if (state.plots[y][x]) return "Something is already growing there.";
+    if (FP.occupantAt(state, x, y)) return "Something is already growing there.";
     if (!state.seeds[seedId]) return "You're out of " + seed.name + " seeds.";
+    const fit = FP.fitSeed(state, seed, x, y);
+    if (fit.error) return fit.error;
     state.seeds[seedId]--;
     if (state.seeds[seedId] <= 0) delete state.seeds[seedId];
-    const plant = { seedId, plantedAt: now, growMs: seed.grow * 1000 * FP.growthFactor(state), harvests: 0, mods: [] };
-    state.plots[y][x] = plant;
+    const plant = FP.newPlant(state, seed, now);
+    state.plots[fit.y][fit.x] = plant;
     state.stats.planted++;
     FP.rollLucky(state, plant);
     return null;
@@ -41,6 +45,16 @@
   FP.harvestPlot = function (state, x, y, now) {
     const plant = state.plots[y][x];
     if (!plant || !FP.isRipe(plant, now)) return null;
+    const result = FP.harvestPlant(state, plant, now);
+    if (result.gone) {
+      FP.removeFence(state, plant); // a fence around a plant that's gone goes back in the bar
+      state.plots[y][x] = null;
+    }
+    return result.item;
+  };
+
+  // Harvests a ripe plant wherever it is. gone is true when it doesn't regrow and should be removed.
+  FP.harvestPlant = function (state, plant, now) {
     const seed = FP.SEED_BY_ID[plant.seedId];
     const item = { seedId: seed.id, value: Math.round(seed.value * FP.modMultiplier(plant.mods)), mods: plant.mods.slice() };
     FP.addXp(state, FP.HARVEST_XP[seed.rarity]);
@@ -54,10 +68,9 @@
       plant.growMs = seed.regrow * 1000 * FP.growthFactor(state);
       plant.harvests++;
       FP.rollLucky(state, plant);
-    } else {
-      state.plots[y][x] = null;
+      return { item, gone: false };
     }
-    return item;
+    return { item, gone: true };
   };
 
   FP.ripeCells = function (state, now) {
@@ -70,6 +83,7 @@
 
   FP.digUp = function (state, x, y) {
     const plant = state.plots[y][x];
+    if (plant) FP.removeFence(state, plant);
     state.plots[y][x] = null;
     return plant;
   };
@@ -132,6 +146,7 @@
     state.floor = i;
     state.plots = state.floors[i].plots;
     state.buildings = state.floors[i].buildings;
+    state.tiles = state.floors[i].tiles;
   };
 
   // Runs fn once for every floor, with that floor showing, then puts the original floor back.
@@ -152,7 +167,7 @@
   // Adds empty floors the player has unlocked but doesn't have yet.
   FP.ensureFloors = function (state) {
     while (state.floors.length < Math.min(FP.MAX_FLOORS, FP.floorsUnlocked(state))) {
-      state.floors.push({ plots: FP.makeGrid(state.cols, state.rows), buildings: [] });
+      state.floors.push({ plots: FP.makeGrid(state.cols, state.rows), buildings: [], tiles: FP.makeGrid(state.cols, state.rows) });
     }
   };
 
@@ -183,8 +198,10 @@
   // Grows every floor to the new size.
   FP.growFarm = function (state, size) {
     state.floors.forEach(f => {
-      while (f.plots[0].length < size.cols) f.plots.forEach(row => row.push(null));
-      while (f.plots.length < size.rows) f.plots.push(new Array(size.cols).fill(null));
+      for (const grid of [f.plots, f.tiles]) {
+        while (grid[0].length < size.cols) grid.forEach(row => row.push(null));
+        while (grid.length < size.rows) grid.push(new Array(size.cols).fill(null));
+      }
     });
     state.cols = size.cols;
     state.rows = size.rows;
@@ -250,7 +267,7 @@
   FP.isStuck = function (state) {
     if (Object.keys(state.seeds).length > 0 || state.harvest.length > 0 || state.buildings.length > 0) return false;
     if (state.floors.some(f => f.buildings.length || f.plots.some(row => row.some(Boolean)))) return false;
-    return state.coins < Math.min(...FP.SEEDS.map(s => s.price));
+    return state.coins < Math.min(...FP.SEEDS.map(s => s.price)); // regular seeds only
   };
 
   // ---------- Upgrades ----------
@@ -407,6 +424,13 @@
     if (!plant) return { error: "There's no plant here to use the " + tool.name + " on." };
     const seed = FP.SEED_BY_ID[plant.seedId];
 
+    if (plant.needsFeed) {
+      if (id !== "fertilizer") return { error: "The " + seed.name + " needs Fertilizer before it will grow." };
+      FP.feedPlant(plant, now);
+      spendTool(state, id);
+      return { ok: true, fed: true };
+    }
+
     if (tool.grow) {
       if (FP.isRipe(plant, now)) return { error: "The " + seed.name + " is already ripe." };
       // Moving the planted time back makes the plant act as if it has been growing longer.
@@ -430,7 +454,14 @@
 
   FP.movePlant = function (state, from, to) {
     if (!state.tools.trowel) return "You're out of Trowel uses.";
+    const plant = state.plots[from.y][from.x];
+    const seed = FP.SEED_BY_ID[plant.seedId];
+    if (FP.plantSize(plant) > 1) return "The " + seed.name + " is too big to move.";
     if (!FP.isFree(state, to.x, to.y)) return "That plot isn't empty.";
+    const tile = FP.tileAt(state, to.x, to.y);
+    const needs = seed.needs || {};
+    if (needs.tile && tile !== needs.tile) return "The " + seed.name + " has to stay on " + FP.TILES[needs.tile].name.toLowerCase() + ".";
+    if (!needs.tile && tile === "water") return "Only water plants can grow in a pond.";
     state.plots[to.y][to.x] = state.plots[from.y][from.x];
     state.plots[from.y][from.x] = null;
     spendTool(state, "trowel");

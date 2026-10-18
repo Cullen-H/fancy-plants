@@ -1,7 +1,7 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 7;
+  const SAVE_VERSION = 8;
 
   const newStats = () => ({ planted: 0, harvested: 0, earned: 0, runEarned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
@@ -30,10 +30,14 @@
       rebirth: { count: 0, gmo: 0, earnedGmo: 0, skills: {}, townSeen: false, townVisited: false },
       fountain: { coins: 0, tosses: 0 },                // coins tossed into the Town fountain, kept forever
       floor: 0,                                         // which floor of the farm is showing
+      tiles: FP.makeGrid(FP.START.cols, FP.START.rows), // special tiles, like sand or water, or null
+      special: { unlocked: {} },                        // special seeds unlocked through Seed Shop quests
+      tileKits: {},                                     // tile kind to count
+      fences: 0,                                        // Picket Fences waiting to be placed
     };
-    // Every floor has its own plots and buildings. state.plots and state.buildings
-    // always point at the floor that is showing.
-    state.floors = [{ plots: state.plots, buildings: state.buildings }];
+    // Every floor has its own plots, buildings, and tiles. state.plots, state.buildings, and
+    // state.tiles always point at the floor that is showing.
+    state.floors = [{ plots: state.plots, buildings: state.buildings, tiles: state.tiles }];
     return state;
   };
 
@@ -69,11 +73,21 @@
   // Version 2 added modifiers, tools, upgrades, and weather. Version 3 added workers.
   // Version 4 added goals, more stats, and the tutorial. Version 5 added tool and worker restocks.
   // Version 6 added farm levels and rebirth. Version 7 added farm floors.
+  // Version 8 added special seeds, tiles, the Green House, and Picket Fences.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
     data.version = SAVE_VERSION;
     return data;
+  }
+
+  function cleanGreenhouse(g) {
+    g = g || {};
+    return {
+      plots: Array.from({ length: 9 }, (_, i) => cleanPlant(Array.isArray(g.plots) ? g.plots[i] : null)),
+      temp: FP.clamp(Math.round(num(g.temp, 2)), 0, FP.TEMPS.length - 1),
+      humid: FP.clamp(Math.round(num(g.humid, 1)), 0, FP.HUMIDS.length - 1),
+    };
   }
 
   const cleanMods = mods => (Array.isArray(mods) ? mods.filter(id => FP.MODS[id]) : []);
@@ -93,7 +107,11 @@
   function cleanPlant(p) {
     if (!p || !FP.SEED_BY_ID[p.seedId]) return null;
     if (!Number.isFinite(p.plantedAt) || !Number.isFinite(p.growMs) || p.growMs <= 0) return null;
-    return { seedId: p.seedId, plantedAt: p.plantedAt, growMs: p.growMs, harvests: num(p.harvests, 0), mods: cleanMods(p.mods) };
+    const plant = { seedId: p.seedId, plantedAt: p.plantedAt, growMs: p.growMs, harvests: num(p.harvests, 0), mods: cleanMods(p.mods) };
+    if (Number.isFinite(p.pausedAt)) plant.pausedAt = p.pausedAt;
+    if (p.needsFeed === true) plant.needsFeed = true;
+    if (p.fenced === true) plant.fenced = true;
+    return plant;
   }
 
   // Rebuilds the state from scratch and copies over only values that make sense.
@@ -130,6 +148,10 @@
     const now = Date.now();
     const cleanFloor = f => {
       const plots = FP.makeGrid(s.cols, s.rows, (x, y) => cleanPlant(f.plots && f.plots[y] && f.plots[y][x]));
+      const tiles = FP.makeGrid(s.cols, s.rows, (x, y) => {
+        const t = f.tiles && f.tiles[y] && f.tiles[y][x];
+        return FP.TILES[t] ? t : null;
+      });
       const buildings = [];
       (Array.isArray(f.buildings) ? f.buildings : []).forEach(b => {
         if (!b || !FP.WORKER_BY_ID[b.workerId]) return;
@@ -137,9 +159,11 @@
         // Skip buildings that are off the farm or on top of a plant or another building.
         if (x < 0 || y < 0 || x >= s.cols || y >= s.rows || plots[y][x]) return;
         if (buildings.some(o => o.x === x && o.y === y)) return;
-        buildings.push({ uid: String(b.uid || Math.random().toString(36).slice(2, 10)), workerId: b.workerId, x, y, level: level(b.level), lastWork: now });
+        const clean = { uid: String(b.uid || Math.random().toString(36).slice(2, 10)), workerId: b.workerId, x, y, level: level(b.level), lastWork: now };
+        if (b.workerId === "greenhouse") clean.inner = cleanGreenhouse(b.inner);
+        buildings.push(clean);
       });
-      return { plots, buildings };
+      return { plots, buildings, tiles };
     };
     // Saves from before floors had one set of plots and buildings at the top level.
     const floors = Array.isArray(d.floors) && d.floors.length ? d.floors.slice(0, FP.MAX_FLOORS) : [{ plots: d.plots, buildings: d.buildings }];
@@ -147,7 +171,11 @@
     FP.setFloor(s, intIn(d.floor, 0, s.floors.length - 1, 0));
     s.workerBag = (Array.isArray(d.workerBag) ? d.workerBag : [])
       .filter(w => w && FP.WORKER_BY_ID[w.workerId])
-      .map(w => ({ workerId: w.workerId, level: level(w.level) }));
+      .map(w => w.workerId === "greenhouse" ? { workerId: w.workerId, level: 1, inner: cleanGreenhouse(w.inner) } : { workerId: w.workerId, level: level(w.level) });
+    s.special = { unlocked: {} };
+    for (const id in (d.special && d.special.unlocked) || {}) if (FP.QUESTS[id]) s.special.unlocked[id] = true;
+    s.tileKits = cleanCounts(d.tileKits, FP.TILES);
+    s.fences = Math.max(0, Math.floor(num(d.fences, 0)));
 
     for (const [key, valid] of [["toolShop", FP.TOOL_BY_ID], ["workerShop", FP.WORKER_BY_ID]]) {
       const shop = d[key];

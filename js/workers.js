@@ -7,7 +7,7 @@
 
   FP.buildingAt = (state, x, y) => state.buildings.find(b => b.x === x && b.y === y) || null;
 
-  FP.isFree = (state, x, y) => !state.plots[y][x] && !FP.buildingAt(state, x, y);
+  FP.isFree = (state, x, y) => !FP.occupantAt(state, x, y) && !FP.buildingAt(state, x, y);
 
   const workerDef = b => FP.WORKER_BY_ID[b.workerId];
   const stat = (b, list) => list[b.level - 1];
@@ -73,17 +73,17 @@
     if (!FP.isFree(state, x, y)) return "Buildings need an empty plot.";
     const chosen = options[0];
     state.workerBag.splice(state.workerBag.indexOf(chosen), 1);
-    state.buildings.push({
-      uid: Math.random().toString(36).slice(2, 10),
-      workerId, x, y, level: chosen.level, lastWork: now,
-    });
+    const b = { uid: Math.random().toString(36).slice(2, 10), workerId, x, y, level: chosen.level, lastWork: now };
+    if (workerId === "greenhouse") b.inner = chosen.inner || FP.newGreenhouse();
+    state.buildings.push(b);
     return null;
   };
 
   // Puts a building back in the bag. It keeps its level.
   FP.pickUpBuilding = function (state, b) {
     state.buildings.splice(state.buildings.indexOf(b), 1); // in place, so the floor keeps the same list
-    state.workerBag.push({ workerId: b.workerId, level: b.level });
+    // A Green House keeps whatever is planted inside when it's picked up.
+    state.workerBag.push(b.inner ? { workerId: b.workerId, level: b.level, inner: b.inner } : { workerId: b.workerId, level: b.level });
   };
 
   FP.buildingUpgradeCost = b => Math.round(workerDef(b).price * 0.8 * b.level / 10) * 10;
@@ -118,7 +118,8 @@
 
     // Harvests one ripe plant in range.
     picker(state, b, now) {
-      const ripe = FP.plantsInRange(state, b, FP.workerRange(b)).filter(p => FP.isRipe(p.plant, now));
+      // Plants with a Picket Fence around them are left alone.
+      const ripe = FP.plantsInRange(state, b, FP.workerRange(b)).filter(p => FP.isRipe(p.plant, now) && !p.plant.fenced);
       if (!ripe.length) return [];
       const target = ripe[Math.floor(Math.random() * ripe.length)];
       const item = FP.harvestPlot(state, target.x, target.y, now);
@@ -158,6 +159,7 @@
   // so a building that was waiting a long time does one job, not hundreds.
   FP.runWorkers = function (state, now, onEvent) {
     for (const b of state.buildings) {
+      if (!WORK[b.workerId]) continue; // buildings like the Green House have no job
       if (now - b.lastWork < FP.workerEvery(b) * 1000 * FP.workerSpeed(state)) continue;
       b.lastWork = now;
       WORK[b.workerId](state, b, now).forEach(event => onEvent(b, event));

@@ -62,6 +62,8 @@ Phase 9 is done. A second after you leave the black hole for the first time, a l
 
 Phase 10 is done. The skill tree has a fifth branch, Land. Wide Fields raises the biggest farm size from 8 by 6 up to 10 by 7, and the extra expansions still cost coins and need levels 17, 19, and 20. Second Floor and Third Floor add whole new layers of plots, and the arrows on the right side of the farm switch between them, with a badge counting ripe plants on the floors above and below. Page Up and Page Down switch floors too. Every floor is the same size, weather and night reach every floor, and buildings keep working on floors you aren't looking at.
 
+Phase 11 is done. The Seed Shop took the top left spot in the Town. It has six special seeds, and each one goes on sale for good after a delivery quest. The Cactus Pear needs sand and the Lotus needs water, and the Seed Shop sells kits that turn any empty plot into either one. The Truffle Root waits as a sprout until it gets Fertilizer. The Giant Pumpkin covers 2 by 2 plots. The Frost Orchid and the Ember Pepper only grow in a Green House set to the right temperature and humidity. The Green House is a building that takes one plot and opens to a 3 by 3 grid that the weather can't reach. The Picket Fence goes around a plant so the Picker leaves it alone, and it wraps the whole Giant Pumpkin. Unlocked special seeds stay unlocked through rebirths.
+
 ## Later phases
 
 | Phase | What gets added |

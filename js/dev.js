@@ -30,6 +30,13 @@
     ] },
     { group: "Rebirth and Town", items: [
       ["+10 GMO Points", g => { g.state.rebirth.gmo += 10; }],
+      ["Unlock special seeds and supplies", g => {
+        FP.SPECIAL_SEEDS.forEach(s => { g.state.special.unlocked[s.id] = true; g.state.seeds[s.id] = (g.state.seeds[s.id] || 0) + 3; });
+        g.state.tileKits.sand = (g.state.tileKits.sand || 0) + 3;
+        g.state.tileKits.water = (g.state.tileKits.water || 0) + 3;
+        g.state.fences += 3;
+        g.state.workerBag.push({ workerId: "greenhouse", level: 1 });
+      }],
       ["Unlock all floors and sizes", g => { Object.assign(g.state.rebirth.skills, { wide: 3, floor2: 1, floor3: 1 }); FP.ensureFloors(g.state); }],
       ["Open black hole", g => g.action("openVoid", {})],
       ["Replay Town cutscene", g => { if (!g.state.rebirth.count) g.state.rebirth.count = 1; g.action("replayTownIntro", {}); }],

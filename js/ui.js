@@ -127,7 +127,8 @@
   const isHeld = (type, id) => {
     const t = ui.tool;
     if (!t || t.type !== type) return false;
-    if (type === "shovel") return true;
+    if (type === "shovel" || type === "fence") return true;
+    if (type === "tile") return t.id === id;
     return (type === "seed" ? t.seedId : type === "tool" ? t.toolId : t.workerId) === id;
   };
 
@@ -137,6 +138,8 @@
     if (type === "shovel") ui.setTool({ type: "shovel" });
     else if (type === "seed") ui.setTool({ type: "seed", seedId: id });
     else if (type === "building") ui.setTool({ type: "building", workerId: id });
+    else if (type === "tile") ui.setTool({ type: "tile", id });
+    else if (type === "fence") ui.setTool({ type: "fence" });
     else ui.setTool({ type: "tool", toolId: id });
   };
 
@@ -146,7 +149,9 @@
     return [
       ...FP.WORKERS.filter(w => state.workerBag.some(b => b.workerId === w.id)).map(w => ({ type: "building", id: w.id })),
       ...FP.TOOLS.filter(t => state.tools[t.id] > 0).map(t => ({ type: "tool", id: t.id })),
-      ...FP.SEEDS.filter(s => state.seeds[s.id] > 0).map(s => ({ type: "seed", id: s.id })),
+      ...Object.keys(FP.TILES).filter(k => state.tileKits[k] > 0).map(k => ({ type: "tile", id: k })),
+      ...(state.fences > 0 ? [{ type: "fence", id: "fence" }] : []),
+      ...FP.ALL_SEEDS.filter(s => state.seeds[s.id] > 0).map(s => ({ type: "seed", id: s.id })),
     ];
   };
 
@@ -155,6 +160,13 @@
       const def = FP.WORKER_BY_ID[item.id];
       return { name: def.building, icon: FP.buildingIconURL(def), count: state.workerBag.filter(b => b.workerId === item.id).length,
         title: `${def.building}. Click an empty plot to place it.` };
+    }
+    if (item.type === "tile") {
+      const t = FP.TILES[item.id];
+      return { name: t.kit, icon: FP.tileIconURL(item.id), count: state.tileKits[item.id], title: `${t.kit}. ${t.desc}` };
+    }
+    if (item.type === "fence") {
+      return { name: "Picket Fence", icon: FP.fenceIconURL(), count: state.fences, title: "Picket Fence. Click a plant to put a fence around it." };
     }
     if (item.type === "tool") {
       const def = FP.TOOL_BY_ID[item.id];
@@ -284,9 +296,9 @@
   ui.workerStats = workerStats;
 
   function workerRows(state) {
-    const locked = FP.WORKERS.filter(w => !FP.workerUnlocked(state, w.id))
+    const locked = FP.WORKERS.filter(w => !w.noShop && !FP.workerUnlocked(state, w.id))
       .map(w => lockedRow(FP.buildingIconURL(w), w.building, "Level " + FP.WORKER_LEVEL[w.id])).join("");
-    if (!FP.WORKERS.some(w => FP.workerUnlocked(state, w.id))) return soldOutRow("Buildings go on sale once your farm reaches level 5.") + locked;
+    if (!FP.WORKERS.some(w => !w.noShop && FP.workerUnlocked(state, w.id))) return soldOutRow("Buildings go on sale once your farm reaches level 5.") + locked;
     return workerStockRows(state) + locked;
   }
 
@@ -555,6 +567,17 @@
     const cost = FP.buildingUpgradeCost(b);
     const pop = ui.els.popup;
     pop.style.setProperty("--rarity", FP.RARITIES[def.rarity].color);
+    if (def.noUpgrade) {
+      const planted = b.inner.plots.filter(Boolean).length;
+      pop.innerHTML = `<div class="popup-head"><b>${def.building}</b><span>${planted} of 9 planted</span></div>
+        <p>${def.desc}</p>
+        <div class="popup-actions">
+          <button class="btn" data-action="openGreenhouse" data-uid="${b.uid}">Open</button>
+          <button class="btn btn-plain" data-action="pickUp" data-uid="${b.uid}">Pick up</button>
+        </div>`;
+      pop.hidden = false;
+      return placePopup(state, b, pop);
+    }
     pop.innerHTML = `<div class="popup-head"><b>${def.building}</b><span>Level ${b.level} of ${FP.WORKER_MAX_LEVEL}</span></div>
       <p>${def.desc}</p>
       <p class="meta">${workerStats(def, b.level)}</p>
@@ -566,14 +589,18 @@
         <button class="btn btn-plain" data-action="pickUp" data-uid="${b.uid}">Pick up</button>
       </div>`;
     pop.hidden = false;
-    // Sit next to the building, on whichever side has room.
+    placePopup(state, b, pop);
+  };
+
+  // Puts the popup next to the building, on whichever side has room.
+  function placePopup(state, b, pop) {
     const r = FP.plotRect(FP.layout(state), b.x, b.y);
     const w = pop.offsetWidth, h = pop.offsetHeight;
     let x = r.x + r.s + 12;
     if (x + w > 900) x = r.x - w - 12;
     const y = FP.clamp(r.y - 10, 72, 625 - h);
     pop.style.transform = `translate(${x}px, ${y}px)`;
-  };
+  }
 
   ui.renderPanel = function () {
     const scroll = ui.els.panel.scrollTop;

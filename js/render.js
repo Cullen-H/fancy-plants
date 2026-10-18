@@ -11,7 +11,8 @@
 
   // Once the Town exists, the farm moves right to make room for the path and the sign.
   FP.TOWN_STRIP = 100;
-  const farmLeft = state => (state.rebirth && state.rebirth.townSeen ? FP.TOWN_STRIP : 0);
+  // The strip also holds the floor arrows, under the sign.
+  const farmLeft = state => ((state.rebirth && state.rebirth.townSeen) || (state.floors && state.floors.length > 1) ? FP.TOWN_STRIP : 0);
 
   FP.layout = function (state) {
     const gap = 12;

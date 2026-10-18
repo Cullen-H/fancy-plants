@@ -82,7 +82,7 @@
 
   // Puts a building back in the bag. It keeps its level.
   FP.pickUpBuilding = function (state, b) {
-    state.buildings = state.buildings.filter(other => other !== b);
+    state.buildings.splice(state.buildings.indexOf(b), 1); // in place, so the floor keeps the same list
     state.workerBag.push({ workerId: b.workerId, level: b.level });
   };
 

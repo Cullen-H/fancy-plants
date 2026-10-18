@@ -2,9 +2,10 @@
 // sits around it. The hole is drawn on its own canvas and the skills are HTML buttons.
 (function (FP) {
   const TAU = FP.TAU;
-  const W = 1280, H = 720, CX = 640, CY = 340;
-  const RING1 = 150, RING2 = 255;  // distance of tier 1 and tier 2 skills from the center
-  const BRANCH_ANGLE = [-135, -45, 45, 135].map(d => d * Math.PI / 180); // top left, top right, bottom right, bottom left
+  const W = 1280, H = 720, CX = 640, CY = 298;
+  const RING1 = 135, RING2 = 260;  // distance of tier 1 and tier 2 skills from the center
+  // Growth top left, Market top right, Luck bottom right, Buildings bottom left, Land straight up.
+  const BRANCH_ANGLE = [-162, -18, 54, 126, -90].map(d => d * Math.PI / 180);
 
   const hole = FP.blackHole = { open: false, selected: null, intro: null, stars: [], scale: 1 };
 
@@ -13,7 +14,8 @@
     const base = BRANCH_ANGLE[skill.branch];
     if (skill.tier === 1) return { x: CX + Math.cos(base) * RING1, y: CY + Math.sin(base) * RING1 };
     const siblings = FP.SKILLS.filter(s => s.branch === skill.branch && s.tier === 2);
-    const spread = (siblings.indexOf(skill) - (siblings.length - 1) / 2) * 0.42;
+    // Ten outer skills, 36 degrees apart, so neighbors never touch.
+    const spread = (siblings.indexOf(skill) - (siblings.length - 1) / 2) * (Math.PI / 5);
     return { x: CX + Math.cos(base + spread) * RING2, y: CY + Math.sin(base + spread) * RING2 };
   }
 
@@ -77,7 +79,8 @@
     let lines = "";
     FP.SKILLS.forEach(skill => {
       const p = skillPos(skill);
-      const from = skill.tier === 1 ? { x: CX, y: CY } : skillPos(FP.SKILLS.find(s => s.branch === skill.branch && s.tier === 1));
+      const parent = skill.needs ? FP.SKILL_BY_ID[skill.needs] : FP.SKILLS.find(s => s.branch === skill.branch && s.tier === 1);
+      const from = skill.tier === 1 ? { x: CX, y: CY } : skillPos(parent);
       const lit = FP.skillLevel(state, skill.id) > 0;
       lines += `<line x1="${from.x}" y1="${from.y}" x2="${p.x}" y2="${p.y}" stroke="${FP.BRANCHES[skill.branch].color}" stroke-opacity="${lit ? 0.9 : 0.25}" stroke-width="${lit ? 4 : 2}" ${lit ? "" : 'stroke-dasharray="6 6"'}/>`;
     });

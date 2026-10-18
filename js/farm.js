@@ -126,15 +126,68 @@
     return { count, coins };
   };
 
+  // ---------- Floors ----------
+
+  FP.setFloor = function (state, i) {
+    state.floor = i;
+    state.plots = state.floors[i].plots;
+    state.buildings = state.floors[i].buildings;
+  };
+
+  // Runs fn once for every floor, with that floor showing, then puts the original floor back.
+  FP.eachFloor = function (state, fn) {
+    const home = state.floor;
+    try {
+      state.floors.forEach((f, i) => {
+        FP.setFloor(state, i);
+        fn(i, i === home);
+      });
+    } finally {
+      FP.setFloor(state, home);
+    }
+  };
+
+  FP.floorsUnlocked = state => 1 + FP.skillLevel(state, "floor2") + FP.skillLevel(state, "floor3");
+
+  // Adds empty floors the player has unlocked but doesn't have yet.
+  FP.ensureFloors = function (state) {
+    while (state.floors.length < Math.min(FP.MAX_FLOORS, FP.floorsUnlocked(state))) {
+      state.floors.push({ plots: FP.makeGrid(state.cols, state.rows), buildings: [] });
+    }
+  };
+
+  // Ripe plants on one floor, for the badges on the floor arrows.
+  FP.ripeOnFloor = (state, i, now) => state.floors[i].plots.reduce((n, row) => n + row.filter(p => p && FP.isRipe(p, now)).length, 0);
+
   // ---------- Farm size ----------
 
-  FP.canExpand = state => state.cols < FP.MAX_COLS || state.rows < FP.MAX_ROWS;
+  // The Wide Fields skill raises the biggest size the farm can reach.
+  FP.maxFarmSize = state => {
+    const [cols, rows] = FP.FARM_SIZES[Math.min(FP.FARM_SIZES.length - 1, FP.skillLevel(state, "wide"))];
+    return { cols, rows };
+  };
 
-  // Alternates between adding a column and a row: 6x4, 7x4, 7x5, 8x5, 8x6.
+  FP.canExpand = state => {
+    const max = FP.maxFarmSize(state);
+    return state.cols < max.cols || state.rows < max.rows;
+  };
+
+  // Alternates between adding a column and a row: 6x4, 7x4, 7x5, 8x5, 8x6, and on with Wide Fields.
   FP.nextFarmSize = function (state) {
     if (!FP.canExpand(state)) return null;
-    const addCol = state.cols < FP.MAX_COLS && (state.cols - state.rows <= 2 || state.rows >= FP.MAX_ROWS);
+    const max = FP.maxFarmSize(state);
+    const addCol = state.cols < max.cols && (state.cols - state.rows <= 2 || state.rows >= max.rows);
     return addCol ? { cols: state.cols + 1, rows: state.rows } : { cols: state.cols, rows: state.rows + 1 };
+  };
+
+  // Grows every floor to the new size.
+  FP.growFarm = function (state, size) {
+    state.floors.forEach(f => {
+      while (f.plots[0].length < size.cols) f.plots.forEach(row => row.push(null));
+      while (f.plots.length < size.rows) f.plots.push(new Array(size.cols).fill(null));
+    });
+    state.cols = size.cols;
+    state.rows = size.rows;
   };
 
   FP.expansionCost = function (state) {
@@ -152,8 +205,7 @@
     const cost = FP.expansionCost(state);
     if (state.coins < cost) return "You need " + FP.formatCoins(cost - state.coins) + " more coins to expand.";
     state.coins -= cost;
-    while (state.cols < next.cols) { state.plots.forEach(row => row.push(null)); state.cols++; }
-    while (state.rows < next.rows) { state.plots.push(new Array(state.cols).fill(null)); state.rows++; }
+    FP.growFarm(state, next);
     return null;
   };
 
@@ -197,7 +249,7 @@
   // True when the player has no seeds, no plants, nothing to sell, and can't afford a seed.
   FP.isStuck = function (state) {
     if (Object.keys(state.seeds).length > 0 || state.harvest.length > 0 || state.buildings.length > 0) return false;
-    if (state.plots.some(row => row.some(Boolean))) return false;
+    if (state.floors.some(f => f.buildings.length || f.plots.some(row => row.some(Boolean)))) return false;
     return state.coins < Math.min(...FP.SEEDS.map(s => s.price));
   };
 

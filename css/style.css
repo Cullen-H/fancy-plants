@@ -903,3 +903,37 @@ html, body {
 .modal-sub .coin-icon { display: inline-block; vertical-align: -2px; margin: 0 3px; }
 .wish { display: block; width: 100%; height: auto; aspect-ratio: 600 / 340; border: 3px solid #2f8fb0; border-radius: 14px; }
 .modal-sub.center { text-align: center; }
+
+/* ---------- Phase 10: farm floors ---------- */
+.floors {
+  position: absolute;
+  left: 884px;
+  top: 300px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  background: rgba(74, 45, 22, 0.92);
+  border: 3px solid var(--wood-dark);
+  border-radius: 14px;
+}
+.floors[hidden] { display: none; }
+.floors button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  color: #4a2d06;
+  background: var(--gold);
+  border: none;
+  border-radius: 9px;
+  box-shadow: 0 3px 0 var(--gold-dark);
+  cursor: pointer;
+}
+.floors button:disabled { color: #8a7a60; background: #cdbb9f; box-shadow: 0 3px 0 #a8977d; cursor: default; }
+.floors button .badge { position: absolute; top: -8px; right: -10px; margin: 0; }
+#floor-label { font-family: var(--font-display); font-size: 12px; line-height: 1.1; text-align: center; color: #fff4d6; width: 38px; }
+.void-top { pointer-events: none; }
+.void-top button { pointer-events: auto; }

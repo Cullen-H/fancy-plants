@@ -30,8 +30,10 @@
   FP.SEEDS.forEach(seed => { FP.SEED_BY_ID[seed.id] = seed; });
 
   FP.START = { coins: 100, cols: 6, rows: 4, seeds: { carrot: 3 } };
-  FP.MAX_COLS = 8;
+  FP.MAX_COLS = 8;  // biggest farm without the Wide Fields skill
   FP.MAX_ROWS = 6;
+  FP.FARM_SIZES = [[8, 6], [9, 6], [9, 7], [10, 7]]; // biggest farm at each Wide Fields level
+  FP.MAX_FLOORS = 3;
   FP.SHOP_REFRESH_MS = 3 * 60 * 1000;
 
   // ---------- Modifiers ----------

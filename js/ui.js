@@ -35,6 +35,8 @@
       clockTime: $("#clock-time"),
       popup: $("#popup"),
       goalCount: $("#goal-count"),
+      floors: $("#floors"),
+      floorLabel: $("#floor-label"),
       levelChip: $("#level"),
       levelNum: $("#level-num"),
       levelLabel: $("#level-label"),
@@ -70,6 +72,10 @@
     ui.els.harvestAll.addEventListener("click", () => game.action("harvestAll", {}));
     ui.els.weather.addEventListener("click", () => ui.setTab("guide"));
     ui.els.levelChip.addEventListener("click", () => ui.setTab("goals"));
+    ui.els.floors.addEventListener("click", e => {
+      const b = e.target.closest("button[data-dir]");
+      if (b && !b.disabled) game.action("floor", { dir: b.dataset.dir });
+    });
     $("#options-btn").addEventListener("click", () => ui.setTab(ui.tab === "options" ? "shop" : "options"));
     // Sliders and switches in the options change settings right away.
     ui.els.panel.addEventListener("input", e => {
@@ -384,7 +390,7 @@
       } else {
         html += `<div class="card">
           <div class="card-title">Bigger Farm</div>
-          <p>Your farm is ${state.cols} by ${state.rows}, which is as big as it gets for now.</p>
+          <p>Your farm is ${state.cols} by ${state.rows}, which is as big as it can get right now.${FP.skillLevel(state, "wide") < 3 ? " The Wide Fields skill in the black hole lets it grow bigger." : ""}</p>
         </div>`;
       }
       html += rebirthCard(state);
@@ -635,6 +641,23 @@
     }
     const clock = FP.clockText(now);
     if (ui.els.clockTime.textContent !== clock) ui.els.clockTime.textContent = clock;
+
+    // Floor arrows, with a count of ripe plants waiting on the floors above and below.
+    const many = state.floors.length > 1;
+    ui.els.floors.hidden = !many;
+    if (many) {
+      const label = "Floor " + (state.floor + 1);
+      if (ui.els.floorLabel.textContent !== label) ui.els.floorLabel.textContent = label;
+      const [up, down] = ui.els.floors.querySelectorAll("button");
+      up.disabled = state.floor >= state.floors.length - 1;
+      down.disabled = state.floor <= 0;
+      const ripe = i => (i >= 0 && i < state.floors.length ? FP.ripeOnFloor(state, i, now) : 0);
+      for (const [btn, n] of [[up, ripe(state.floor + 1)], [down, ripe(state.floor - 1)]]) {
+        const badge = btn.querySelector(".badge");
+        badge.hidden = n === 0;
+        if (n) badge.textContent = n > 99 ? "99+" : n;
+      }
+    }
 
     if (state.harvest.length !== ui.lastBasket) {
       ui.lastBasket = state.harvest.length;

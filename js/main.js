@@ -247,6 +247,21 @@
       maybeStartTownIntro(800);
     },
 
+    // dir is 1 to go up a floor and -1 to go down.
+    floor(d) {
+      const dir = Number(d.dir);
+      const next = state.floor + dir;
+      if (next < 0 || next >= state.floors.length) return;
+      FP.setFloor(state, next);
+      FP.renderer.forget();
+      FP.renderer.floorSlide(dir);
+      ui.closeBuilding();
+      view.carrying = null;
+      view.pendingDig = null;
+      FP.sfx("click");
+      ui.refresh();
+    },
+
     openTown() {
       if (FP.renderer.introRunning()) return;
       state.rebirth.townVisited = true;
@@ -553,6 +568,8 @@
     }
     else if (e.key === "q" || e.key === "Q") ui.selectSlot("shovel");
     else if (e.key === "h" || e.key === "H") actions.harvestAll();
+    else if (e.key === "PageUp") actions.floor({ dir: 1 });
+    else if (e.key === "PageDown") actions.floor({ dir: -1 });
     else if (/^[1-9]$/.test(e.key)) {
       const item = ui.hotbarItems()[Number(e.key) - 1];
       if (item) ui.selectSlot(item.type, item.id);
@@ -604,11 +621,14 @@
     }
     if (now >= nextWeatherTick) {
       nextWeatherTick = now + FP.WEATHER_TICK_MS;
-      FP.weatherTick(state, (x, y, plant, modId, result) => {
-        weatherChanged++;
-        celebrateMod(x, y, plant, modId, result);
+      // Weather and night reach every floor, but only the floor on screen shows sparkles.
+      FP.eachFloor(state, (i, showing) => {
+        FP.weatherTick(state, (x, y, plant, modId, result) => {
+          weatherChanged++;
+          if (showing) celebrateMod(x, y, plant, modId, result);
+        });
+        FP.nightTick(state, now, showing ? celebrateMod : () => {});
       });
-      FP.nightTick(state, now, celebrateMod);
     }
   }
 
@@ -776,7 +796,8 @@
       tutorial.tick(now);
       checkGoals();
       checkLevel();
-      FP.runWorkers(state, now, onWorkerEvent);
+      // Buildings work on every floor. Only the floor on screen animates.
+      FP.eachFloor(state, (i, showing) => FP.runWorkers(state, now, showing ? onWorkerEvent : () => {}));
       announceLucky();
       if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
 

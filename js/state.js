@@ -1,12 +1,12 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 6;
+  const SAVE_VERSION = 7;
 
   const newStats = () => ({ planted: 0, harvested: 0, earned: 0, runEarned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
   FP.newState = function () {
-    return {
+    const state = {
       version: SAVE_VERSION,
       coins: FP.START.coins,
       cols: FP.START.cols,
@@ -29,7 +29,12 @@
       xp: 0,                                            // total XP this run; the farm level comes from it
       rebirth: { count: 0, gmo: 0, earnedGmo: 0, skills: {}, townSeen: false, townVisited: false },
       fountain: { coins: 0, tosses: 0 },                // coins tossed into the Town fountain, kept forever
+      floor: 0,                                         // which floor of the farm is showing
     };
+    // Every floor has its own plots and buildings. state.plots and state.buildings
+    // always point at the floor that is showing.
+    state.floors = [{ plots: state.plots, buildings: state.buildings }];
+    return state;
   };
 
   FP.save = function (state) {
@@ -63,7 +68,7 @@
   // Each save format change gets a step here that upgrades the old data.
   // Version 2 added modifiers, tools, upgrades, and weather. Version 3 added workers.
   // Version 4 added goals, more stats, and the tutorial. Version 5 added tool and worker restocks.
-  // Version 6 added farm levels and rebirth.
+  // Version 6 added farm levels and rebirth. Version 7 added farm floors.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
@@ -96,9 +101,9 @@
   function sanitize(d) {
     const s = FP.newState();
     s.coins = Math.max(0, num(d.coins, s.coins));
-    s.cols = intIn(d.cols, FP.START.cols, FP.MAX_COLS, FP.START.cols);
-    s.rows = intIn(d.rows, FP.START.rows, FP.MAX_ROWS, FP.START.rows);
-    s.plots = FP.makeGrid(s.cols, s.rows, (x, y) => cleanPlant(d.plots && d.plots[y] && d.plots[y][x]));
+    const biggest = FP.FARM_SIZES[FP.FARM_SIZES.length - 1];
+    s.cols = intIn(d.cols, FP.START.cols, biggest[0], FP.START.cols);
+    s.rows = intIn(d.rows, FP.START.rows, biggest[1], FP.START.rows);
 
     s.seeds = cleanCounts(d.seeds, FP.SEED_BY_ID);
     s.tools = cleanCounts(d.tools, FP.TOOL_BY_ID);
@@ -123,14 +128,23 @@
 
     const level = v => intIn(v, 1, FP.WORKER_MAX_LEVEL, 1);
     const now = Date.now();
-    (Array.isArray(d.buildings) ? d.buildings : []).forEach(b => {
-      if (!b || !FP.WORKER_BY_ID[b.workerId]) return;
-      const x = Math.round(num(b.x, -1)), y = Math.round(num(b.y, -1));
-      // Skip buildings that are off the farm or on top of a plant or another building.
-      if (x < 0 || y < 0 || x >= s.cols || y >= s.rows || s.plots[y][x]) return;
-      if (s.buildings.some(o => o.x === x && o.y === y)) return;
-      s.buildings.push({ uid: String(b.uid || Math.random().toString(36).slice(2, 10)), workerId: b.workerId, x, y, level: level(b.level), lastWork: now });
-    });
+    const cleanFloor = f => {
+      const plots = FP.makeGrid(s.cols, s.rows, (x, y) => cleanPlant(f.plots && f.plots[y] && f.plots[y][x]));
+      const buildings = [];
+      (Array.isArray(f.buildings) ? f.buildings : []).forEach(b => {
+        if (!b || !FP.WORKER_BY_ID[b.workerId]) return;
+        const x = Math.round(num(b.x, -1)), y = Math.round(num(b.y, -1));
+        // Skip buildings that are off the farm or on top of a plant or another building.
+        if (x < 0 || y < 0 || x >= s.cols || y >= s.rows || plots[y][x]) return;
+        if (buildings.some(o => o.x === x && o.y === y)) return;
+        buildings.push({ uid: String(b.uid || Math.random().toString(36).slice(2, 10)), workerId: b.workerId, x, y, level: level(b.level), lastWork: now });
+      });
+      return { plots, buildings };
+    };
+    // Saves from before floors had one set of plots and buildings at the top level.
+    const floors = Array.isArray(d.floors) && d.floors.length ? d.floors.slice(0, FP.MAX_FLOORS) : [{ plots: d.plots, buildings: d.buildings }];
+    s.floors = floors.map(f => cleanFloor(f || {}));
+    FP.setFloor(s, intIn(d.floor, 0, s.floors.length - 1, 0));
     s.workerBag = (Array.isArray(d.workerBag) ? d.workerBag : [])
       .filter(w => w && FP.WORKER_BY_ID[w.workerId])
       .map(w => ({ workerId: w.workerId, level: level(w.level) }));
@@ -148,7 +162,7 @@
       else s.stats[key] = num(st[key], 0);
     }
     // Older saves didn't count hires, so count the buildings they already have.
-    if (!st.hired) s.stats.hired = s.buildings.length + s.workerBag.length;
+    if (!st.hired) s.stats.hired = s.floors.reduce((n, f) => n + f.buildings.length, 0) + s.workerBag.length;
     s.goalsClaimed = {};
     for (const id in d.goalsClaimed || {}) s.goalsClaimed[id] = true;
     // Saves from before the tutorial existed skip it.

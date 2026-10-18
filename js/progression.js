@@ -28,7 +28,7 @@
   FP.RARITY_LEVEL = [1, 3, 7, 12, 16];
   FP.TOOL_LEVEL = { can: 2, fertilizer: 5, trowel: 5, jar: 10, spray: 14 };
   FP.WORKER_LEVEL = { waterer: 5, picker: 7, cultivator: 10, beekeeper: 14, shadow: 18 };
-  FP.EXPAND_LEVEL = [2, 6, 11, 15];   // level needed for the 1st, 2nd, 3rd, and 4th expansion
+  FP.EXPAND_LEVEL = [2, 6, 11, 15, 17, 19, 20]; // level needed for each expansion, in order
   FP.WEATHER_LEVEL = 3;
   FP.RARE_WEATHER_LEVEL = 9;
   FP.RARE_WEATHERS = ["rainbow", "bloodmoon", "meteors"];
@@ -68,6 +68,7 @@
     { name: "Market",  color: "#ffd23f" },
     { name: "Luck",    color: "#ff7ad9" },
     { name: "Buildings", color: "#5ec8ff" },
+    { name: "Land",    color: "#d9a86a" },
   ];
 
   // tier 1 skills sit next to the black hole. tier 2 skills need their branch's tier 1 skill first.
@@ -86,6 +87,14 @@
     { id: "headstart", branch: 3, tier: 2, name: "Head Start",    max: 2, cost: 3, desc: "Every new run starts with a Waterer's Shed, and at level 2 a Picker's Hut too." },
     { id: "jobboard",  branch: 3, tier: 2, name: "Builder's Board", max: 3, cost: 2, desc: "Rare buildings show up in the shop 30% more often for each level." },
   ];
+  FP.SKILLS.push(
+    { id: "wide",   branch: 4, tier: 1, name: "Wide Fields",  max: 3, cost: 3,
+      desc: "Lets your farm grow bigger. Level 1 allows 9 by 6, level 2 allows 9 by 7, and level 3 allows 10 by 7. You still expand it with coins in the Upgrades tab." },
+    { id: "floor2", branch: 4, tier: 2, name: "Second Floor", max: 1, cost: 6,
+      desc: "Adds a second floor to your farm, a whole new layer of plots. Use the arrows beside the farm to switch floors." },
+    { id: "floor3", branch: 4, tier: 2, name: "Third Floor",  max: 1, cost: 12, needs: "floor2",
+      desc: "Adds a third floor on top of the second one." },
+  );
   FP.SKILL_BY_ID = {};
   FP.SKILLS.forEach(s => { FP.SKILL_BY_ID[s.id] = s; });
 
@@ -100,6 +109,7 @@
       const root = FP.SKILLS.find(s => s.branch === skill.branch && s.tier === 1);
       if (!FP.skillLevel(state, root.id)) return "Needs " + root.name + " first.";
     }
+    if (skill.needs && !FP.skillLevel(state, skill.needs)) return "Needs " + FP.SKILL_BY_ID[skill.needs].name + " first.";
     const cost = FP.skillCost(state, id);
     if (state.rebirth.gmo < cost) return "You need " + (cost - state.rebirth.gmo) + " more GMO " + (cost - state.rebirth.gmo === 1 ? "Point." : "Points.");
     return null;
@@ -110,6 +120,7 @@
     if (err) return err;
     state.rebirth.gmo -= FP.skillCost(state, id);
     state.rebirth.skills[id] = FP.skillLevel(state, id) + 1;
+    FP.ensureFloors(state); // a new floor shows up right away
     return null;
   };
 
@@ -146,11 +157,11 @@
   // Skills that change how a run starts.
   function applyRunBonuses(state, now) {
     state.coins += NEST_EGG[FP.skillLevel(state, "nestegg")];
+    FP.ensureFloors(state);
     for (let i = 0; i < FP.skillLevel(state, "roots"); i++) {
       const size = FP.nextFarmSize(state);
       if (!size) break;
-      while (state.cols < size.cols) { state.plots.forEach(row => row.push(null)); state.cols++; }
-      while (state.rows < size.rows) { state.plots.push(new Array(state.cols).fill(null)); state.rows++; }
+      FP.growFarm(state, size);
     }
     const head = FP.skillLevel(state, "headstart");
     if (head >= 1) state.workerBag.push({ workerId: "waterer", level: 1 });

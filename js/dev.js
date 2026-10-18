@@ -30,6 +30,7 @@
     ] },
     { group: "Rebirth and Town", items: [
       ["+10 GMO Points", g => { g.state.rebirth.gmo += 10; }],
+      ["Unlock all floors and sizes", g => { Object.assign(g.state.rebirth.skills, { wide: 3, floor2: 1, floor3: 1 }); FP.ensureFloors(g.state); }],
       ["Open black hole", g => g.action("openVoid", {})],
       ["Replay Town cutscene", g => { if (!g.state.rebirth.count) g.state.rebirth.count = 1; g.action("replayTownIntro", {}); }],
       ["Open Town", g => { if (!g.state.rebirth.townSeen) { g.state.rebirth.count = Math.max(1, g.state.rebirth.count); g.state.rebirth.townSeen = true; } g.action("openTown", {}); }],

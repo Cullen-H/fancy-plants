@@ -1300,6 +1300,9 @@
 
     const L = FP.layout(state);
     drawRoadUnder(ctx, state, performance.now());
+    const slide = floorSlide();
+    ctx.save();
+    ctx.translate(0, slide);
     ctx.drawImage(farmLayer(state, L), 0, 0, W, H);
     const tool = view.tool;
     const carrying = view.carrying;
@@ -1367,8 +1370,9 @@
     updateWalkers(state, L, dt);
     drawPulses(ctx, dt);
     drawWalkers(ctx, state, L, t);
-    drawRoadOver(ctx, state, performance.now(), t, view);
     drawFlights(ctx, dt, t);
+    ctx.restore();
+    drawRoadOver(ctx, state, performance.now(), t, view);
 
     if (!FP.settings.calm) drawClouds(ctx, t);
     updateSky(state, dt);
@@ -1380,6 +1384,8 @@
     FP.drawWeather(ctx, sky.id, t, sky.alpha);
     drawDaylight(ctx, now, t);
 
+    ctx.save();
+    ctx.translate(0, slide);
     for (let y = 0; y < state.rows; y++) {
       for (let x = 0; x < state.cols; x++) {
         const plant = state.plots[y][x];
@@ -1389,6 +1395,7 @@
         drawModPips(ctx, plant, r, t);
       }
     }
+    ctx.restore();
     drawTooltip(ctx, state, view, now, t);
 
     const fctx = R.fxCtx;
@@ -1399,6 +1406,18 @@
 
     firstFrame = false;
   };
+
+  // Switching floors slides the new floor in from above or below.
+  let slideStart = 0, slideDir = 0;
+  R.floorSlide = function (dir) {
+    slideStart = performance.now();
+    slideDir = dir;
+  };
+  function floorSlide() {
+    const k = (performance.now() - slideStart) / 320;
+    if (k >= 1 || !slideDir) return 0;
+    return slideDir * 90 * Math.pow(1 - k, 3);
+  }
 
   // Forget remembered stages, for example after the farm is reset.
   R.forget = function () {

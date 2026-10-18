@@ -279,13 +279,13 @@
 
   function workerRows(state) {
     const locked = FP.WORKERS.filter(w => !FP.workerUnlocked(state, w.id))
-      .map(w => lockedRow(FP.buildingIconURL(w), w.name, "Level " + FP.WORKER_LEVEL[w.id])).join("");
-    if (!FP.WORKERS.some(w => FP.workerUnlocked(state, w.id))) return soldOutRow("Workers start looking for jobs once your farm reaches level 5.") + locked;
+      .map(w => lockedRow(FP.buildingIconURL(w), w.building, "Level " + FP.WORKER_LEVEL[w.id])).join("");
+    if (!FP.WORKERS.some(w => FP.workerUnlocked(state, w.id))) return soldOutRow("Buildings go on sale once your farm reaches level 5.") + locked;
     return workerStockRows(state) + locked;
   }
 
   function workerStockRows(state) {
-    if (!state.workerShop.stock.length) return soldOutRow("Nobody is looking for work right now. Check back after the next restock.");
+    if (!state.workerShop.stock.length) return soldOutRow("No buildings are for sale right now. Check back after the next restock.");
     return state.workerShop.stock.map(slot => {
       const def = FP.WORKER_BY_ID[slot.id];
       const sold = slot.left <= 0;
@@ -295,13 +295,13 @@
       return `<li class="row ${sold ? "sold" : ""}" style="--rarity:${rarity.color}">
         <img class="icon" src="${FP.buildingIconURL(def)}" alt="">
         <div class="info">
-          <div class="name">${def.name}</div>
-          <div class="meta"><span class="tag">${rarity.name}</span>Lives in a ${def.building}</div>
+          <div class="name">${def.building}</div>
+          <div class="meta"><span class="tag">${rarity.name}</span>Home of the ${def.name}</div>
           <div class="meta">${def.desc}</div>
         </div>
         <div class="buy">
           <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-action="hire" data-id="${def.id}" ${sold ? "disabled" : ""}>${coin}${FP.formatCoins(price)}</button>
-          <div class="stock">${sold ? "Hired" : owned ? owned + " already hired" : ""}</div>
+          <div class="stock">${sold ? "Sold out" : owned ? owned + " owned" : ""}</div>
         </div>
       </li>`;
     }).join("");
@@ -319,7 +319,7 @@
     }
     return `<div class="card rebirth">
       <div class="card-title">Rebirth</div>
-      <p>Your farm, coins, seeds, tools, upgrades, and workers will be pulled into a black hole. You keep the guide, your goals, and your skills, and you get <b>${gmo} GMO ${gmo === 1 ? "Point" : "Points"}</b> to spend on the skill tree. Earning more coins before you rebirth gives more points.</p>
+      <p>Your farm, coins, seeds, tools, upgrades, and buildings will be pulled into a black hole. You keep the guide, your goals, and your skills, and you get <b>${gmo} GMO ${gmo === 1 ? "Point" : "Points"}</b> to spend on the skill tree. Earning more coins before you rebirth gives more points.</p>
       <button class="btn btn-void wide" data-action="rebirth">Rebirth for ${gmo} GMO ${gmo === 1 ? "Point" : "Points"}</button>
       ${visit}
     </div>`;
@@ -328,14 +328,14 @@
   const SHOP_VIEWS = {
     seeds: state => ({ head: `<h2>Seed Shop</h2><p class="sub">New stock arrives in <b id="shop-timer">${FP.formatClock(state.shop.nextRefresh - Date.now())}</b></p>`, rows: seedRows(state) }),
     tools: state => ({ head: `<h2>Tool Shop</h2><p class="sub">New stock arrives in <b id="shop-timer">${FP.formatClock(state.toolShop.nextRefresh - Date.now())}</b></p>`, rows: toolRows(state) }),
-    workers: state => ({ head: `<h2>Workers</h2><p class="sub">New workers arrive in <b id="shop-timer">${FP.formatClock(state.workerShop.nextRefresh - Date.now())}</b>. Each one comes with a building that takes up one plot, and a second of the same kind costs more.</p>`, rows: workerRows(state) }),
+    workers: state => ({ head: `<h2>Buildings</h2><p class="sub">New buildings arrive in <b id="shop-timer">${FP.formatClock(state.workerShop.nextRefresh - Date.now())}</b>. Each one takes up one plot and has someone inside who helps the farm. A second of the same kind costs more.</p>`, rows: workerRows(state) }),
   };
 
   const PANELS = {
     shop(state) {
       const view = SHOP_VIEWS[ui.shopView](state);
       const tab = (id, label) => `<button data-action="shopView" data-view="${id}" class="${ui.shopView === id ? "on" : ""}">${label}</button>`;
-      return `<div class="seg">${tab("seeds", "Seeds")}${tab("tools", "Tools")}${tab("workers", "Workers")}</div>
+      return `<div class="seg">${tab("seeds", "Seeds")}${tab("tools", "Tools")}${tab("workers", "Buildings")}</div>
         <div class="panel-head">${view.head}</div>
         <ul class="list">${view.rows}</ul>`;
     },
@@ -443,10 +443,10 @@
         </div>
         <h3 class="section">Weather</h3><ul class="list">${weatherRows}</ul>
         <h3 class="section">Lucky finds</h3><ul class="list">${luckyRows}</ul>
-        <h3 class="section">Worker gifts</h3>
+        <h3 class="section">Building gifts</h3>
         <ul class="list">${["aura", "pollinated", "risen"].map(id => `<li class="row slim">
           <div class="info"><div class="name">${modTag(id)} ${mult(id)}</div>
-          <div class="meta">Given by the ${FP.WORKERS.find(w => w.mod === id).name}.</div></div>
+          <div class="meta">Given by the ${FP.WORKERS.find(w => w.mod === id).building}.</div></div>
         </li>`).join("")}</ul>
         <h3 class="section">Fusions <span class="count-note">${found} of ${FP.FUSIONS.length} found</span></h3>
         <p class="guide-note">When a plant has both modifiers on the left, they combine into a stronger one.</p>
@@ -516,7 +516,7 @@
             <dt>Crops harvested</dt><dd>${FP.formatCoins(s.harvested)}</dd>
             <dt>Coins earned</dt><dd>${FP.formatCoins(s.earned)}</dd>
             <dt>Best single sale</dt><dd>${FP.formatCoins(s.best)}</dd>
-            <dt>Workers hired</dt><dd>${FP.formatCoins(s.hired)}</dd>
+            <dt>Buildings bought</dt><dd>${FP.formatCoins(s.hired)}</dd>
           </dl>
         </div>
         <div class="card">

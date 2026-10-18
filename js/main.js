@@ -102,7 +102,7 @@
       if (err) return fail(err);
       const from = el && FP.renderer.centerOf(el);
       FP.sfx("buy");
-      toast("You hired " + FP.withArticle(def.name) + ". Place their " + def.building + " on an empty plot.");
+      toast("You bought " + FP.withArticle(def.building) + ". Place it on an empty plot.");
       ui.tool = { type: "building", workerId: def.id };
       coinsChanged();
       ui.renderHotbar();
@@ -211,7 +211,7 @@
     rebirth() {
       if (!FP.canRebirth(state)) return fail("Rebirth unlocks at level " + FP.REBIRTH_LEVEL + ".");
       const gmo = FP.gmoForRebirth(state);
-      if (!window.confirm("Rebirth now? Your farm, coins, seeds, tools, upgrades, and workers will be lost, and you will get " +
+      if (!window.confirm("Rebirth now? Your farm, coins, seeds, tools, upgrades, and buildings will be lost, and you will get " +
         gmo + " GMO " + (gmo === 1 ? "Point" : "Points") + ".")) return;
       // Copy the farm as it looks right now, so it can spin into the hole.
       const snapshot = document.createElement("canvas");
@@ -752,7 +752,7 @@
       if (now >= state.workerShop.nextRefresh) {
         FP.refreshWorkerShop(state, now);
         const rare = state.workerShop.stock.map(s => FP.WORKER_BY_ID[s.id]).filter(w => w.rarity >= 2).pop();
-        if (rare) toast(FP.withArticle(rare.name).replace(/^./, c => c.toUpperCase()) + " is looking for work in the shop.");
+        if (rare) toast("The shop has " + FP.withArticle(rare.building) + " for sale.");
         ui.refreshTab("shop");
       }
       if (now >= state.shop.nextRefresh) {

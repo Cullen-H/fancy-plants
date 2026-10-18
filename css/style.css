@@ -901,3 +901,5 @@ html, body {
 .moves.toss { flex-wrap: wrap; }
 .moves.toss .btn { min-width: 0; }
 .modal-sub .coin-icon { display: inline-block; vertical-align: -2px; margin: 0 3px; }
+.wish { display: block; width: 100%; height: auto; aspect-ratio: 600 / 340; border: 3px solid #2f8fb0; border-radius: 14px; }
+.modal-sub.center { text-align: center; }

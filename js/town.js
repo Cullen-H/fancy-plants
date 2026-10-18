@@ -57,7 +57,7 @@
   // cx and base are where the middle of its front wall meets the ground.
 
   const PLAZA = { x: 640, y: 430, rx: 450, ry: 165 };
-  const FOUNTAIN = { x: 600, y: 425 };
+  const FOUNTAIN = { x: 640, y: 425 };
 
   const BUILDINGS = [
     { id: "soon1",   name: "Coming Soon",     cx: 370,  base: 292, dw: 200, dh: 220, k: 0.72, open: false },
@@ -470,6 +470,7 @@
     }
 
     drawTossed(ctx, dt);
+    if (town.modal && town.modal.id === "fountain") drawWish(dt);
 
     if (night > 0.01) {
       ctx.fillStyle = `rgba(16,24,70,${0.3 * night})`;
@@ -500,6 +501,209 @@
       town.tossed.push({ age: -i * 0.06, dur: 0.75, from: 560 + Math.random() * 160, off: (Math.random() - 0.5) * 70 });
     }
   };
+
+  // ---------- Fountain close-up ----------
+  // The player stands at the edge of the fountain and tosses one coin at a time.
+  // The game still counts the coins, but the count is never shown.
+
+  const WISH_W = 600, WISH_H = 340;
+  const BASIN = { x: 300, y: 178, rx: 282, ry: 96 };
+  const WATER = { x: 300, y: 172, rx: 252, ry: 78 };
+  const wish = town.wish = { coins: [], drops: [], ripples: [], sunk: [], armUntil: 0, last: 0 };
+
+  // A random spot on the water, kept away from the center column.
+  function waterSpot() {
+    for (;;) {
+      const a = Math.random() * TAU, r = 0.25 + Math.random() * 0.68;
+      const x = WATER.x + Math.cos(a) * WATER.rx * r, y = WATER.y + Math.sin(a) * WATER.ry * r;
+      if (y < WATER.y + 50) return { x, y };
+    }
+  }
+
+  // Throws one coin. Now and then it clinks off the stone rim before it hops in.
+  town.tossWish = function () {
+    const now = performance.now() / 1000;
+    const end = waterSpot();
+    const hand = { x: 330, y: 268 };
+    const rim = Math.random() < 0.15;
+    let first = end;
+    if (rim) {
+      const a = Math.PI + 0.3 + Math.random() * (Math.PI - 0.6); // somewhere along the far rim
+      first = { x: BASIN.x + Math.cos(a) * (BASIN.rx - 14), y: BASIN.y + Math.sin(a) * (BASIN.ry - 8) };
+    }
+    wish.coins.push({
+      legs: rim ? [{ from: hand, to: first, h: 120 + Math.random() * 60, dur: 0.85 }, { from: first, to: end, h: 30, dur: 0.4 }]
+                : [{ from: hand, to: end, h: 80 + Math.random() * 110, dur: 0.7 + Math.random() * 0.35 }],
+      leg: 0, start: now, spin: 8 + Math.random() * 12, tilt: Math.random() * TAU,
+    });
+    wish.armUntil = now + 0.35;
+    FP.sfx("click");
+  };
+
+  function splash(x, y, big) {
+    const n = big ? 12 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2;
+      const sp = 60 + Math.random() * 110;
+      wish.drops.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: 0, life: 0.5 + Math.random() * 0.3 });
+    }
+    for (let i = 0; i < 3; i++) wish.ripples.push({ x, y, age: -i * 0.18, life: 1.4 });
+    FP.sfx("splash");
+  }
+
+  function drawWish(dt) {
+    const c = document.getElementById("wish");
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    const now = performance.now() / 1000;
+    ctx.setTransform(c.width / WISH_W, 0, 0, c.height / WISH_H, 0, 0);
+
+    // Paving stones around the fountain
+    const ground = ctx.createLinearGradient(0, 0, 0, WISH_H);
+    ground.addColorStop(0, "#cdbd9c");
+    ground.addColorStop(1, "#e2d4b8");
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, 0, WISH_W, WISH_H);
+    const rand = FP.rng(12);
+    for (let i = 0; i < 70; i++) {
+      ctx.beginPath();
+      ctx.ellipse(rand() * WISH_W, rand() * WISH_H, 6 + rand() * 10, 3 + rand() * 4, 0, 0, TAU);
+      ctx.fillStyle = rand() < 0.5 ? "rgba(150,130,100,0.3)" : "rgba(250,240,220,0.45)";
+      ctx.fill();
+    }
+
+    // Basin and water
+    ctx.beginPath();
+    ctx.ellipse(BASIN.x, BASIN.y + 10, BASIN.rx, BASIN.ry, 0, 0, TAU);
+    ctx.fillStyle = "rgba(40,30,20,0.25)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(BASIN.x, BASIN.y, BASIN.rx, BASIN.ry, 0, 0, TAU);
+    outlined(ctx, "#bdb6aa", 4);
+    const water = ctx.createRadialGradient(WATER.x, WATER.y - 10, 20, WATER.x, WATER.y, WATER.rx);
+    water.addColorStop(0, "#7cc8f2");
+    water.addColorStop(1, "#3f8fc8");
+    ctx.beginPath();
+    ctx.ellipse(WATER.x, WATER.y, WATER.rx, WATER.ry, 0, 0, TAU);
+    ctx.fillStyle = water;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#2f6f9f";
+    ctx.stroke();
+
+    // Coins resting on the bottom
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(WATER.x, WATER.y, WATER.rx - 2, WATER.ry - 2, 0, 0, TAU);
+    ctx.clip();
+    for (const s of wish.sunk) {
+      const k = Math.min(1, (now - s.at) / 1.2);
+      ctx.globalAlpha = 0.35 + 0.4 * k;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y + 6 * k, 5, 2.6, s.tilt, 0, TAU);
+      ctx.fillStyle = Math.sin(now * 2 + s.tilt * 5) > 0.85 ? "#fff3a0" : "#e0a82a";
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Light dancing on the surface
+    for (let i = 0; i < 9; i++) {
+      const x = WATER.x + Math.sin(now * 0.7 + i * 1.9) * WATER.rx * 0.75;
+      const y = WATER.y + Math.cos(now * 0.5 + i * 2.7) * WATER.ry * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 16, 3, 0, 0, TAU);
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Ripples from splashes
+    wish.ripples = wish.ripples.filter(r => (r.age += dt) < r.life);
+    for (const r of wish.ripples) {
+      if (r.age < 0) continue;
+      const k = r.age / r.life;
+      ctx.beginPath();
+      ctx.ellipse(r.x, r.y, 4 + k * 46, 1.5 + k * 15, 0, 0, TAU);
+      ctx.strokeStyle = `rgba(255,255,255,${0.75 * (1 - k)})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Center column, top bowl, and the water falling from it
+    FP.roundRect(ctx, BASIN.x - 16, 40, 32, WATER.y - 40, 6);
+    outlined(ctx, "#cfc8bc", 3);
+    ctx.beginPath();
+    ctx.ellipse(BASIN.x, 42, 62, 16, 0, 0, TAU);
+    outlined(ctx, "#cfc8bc", 3);
+    ctx.fillStyle = "rgba(180,225,255,0.9)";
+    for (let s = 0; s < 10; s++) {
+      const a = s / 10 * TAU;
+      for (let i = 0; i < 6; i++) {
+        const k = (now * 0.8 + i / 6) % 1;
+        const x = BASIN.x + Math.cos(a) * (20 + k * 110);
+        const y = 40 + Math.sin(a) * (6 + k * 30) - Math.sin(k * Math.PI) * 30 + k * 115;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.6, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    // Coins in the air
+    for (let i = wish.coins.length - 1; i >= 0; i--) {
+      const coin = wish.coins[i];
+      const leg = coin.legs[coin.leg];
+      const k = (now - coin.start) / leg.dur;
+      if (k >= 1) {
+        if (coin.leg + 1 < coin.legs.length) {
+          coin.leg++;
+          coin.start = now;
+          FP.sfx("click"); // clink on the stone
+          continue;
+        }
+        splash(leg.to.x, leg.to.y, Math.random() < 0.3);
+        wish.sunk.push({ x: leg.to.x, y: leg.to.y, tilt: coin.tilt, at: now });
+        if (wish.sunk.length > 60) wish.sunk.shift();
+        wish.coins.splice(i, 1);
+        continue;
+      }
+      const x = leg.from.x + (leg.to.x - leg.from.x) * k;
+      const y = leg.from.y + (leg.to.y - leg.from.y) * k - Math.sin(k * Math.PI) * leg.h;
+      const size = 9 - 3 * ((coin.leg + k) / coin.legs.length);
+      const face = Math.abs(Math.cos((now - coin.start) * coin.spin + coin.tilt));
+      ctx.beginPath();
+      ctx.ellipse(x, y, size * Math.max(0.15, face), size, 0, 0, TAU);
+      ctx.fillStyle = face > 0.5 ? "#f5b82e" : "#c98a0c";
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "#8a5a06";
+      ctx.stroke();
+    }
+
+    // Splash droplets
+    wish.drops = wish.drops.filter(d => (d.age += dt) < d.life);
+    ctx.fillStyle = "rgba(220,245,255,0.95)";
+    for (const d of wish.drops) {
+      d.vy += 420 * dt;
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, 2.2 * (1 - d.age / d.life) + 0.6, 0, TAU);
+      ctx.fill();
+    }
+
+    // The player, seen from behind, with a coin in hand until it's thrown
+    const throwing = now < wish.armUntil;
+    const px = 300, py = WISH_H + 50;
+    FP.drawPerson(ctx, px, py, 130, "#6b8e23", now, false);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#f5cfa0";
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(px + 30, py - 100);
+    if (throwing) ctx.lineTo(px + 46, py - 170);
+    else ctx.lineTo(px + 52, py - 70);
+    ctx.stroke();
+    if (!throwing) FP.drawCoin(ctx, px + 54, py - 68, 0.8);
+  }
 
   // ---------- Building menus ----------
 
@@ -550,13 +754,9 @@
     const m = town.modal;
     let body = "";
     if (m.id === "fountain") {
-      const f = state.fountain;
-      const amounts = [1, 10, 100, 1000, 10000];
-      body = `<p class="modal-sub">Toss coins into the fountain. It keeps count of every coin that goes in, though nobody knows what it's saving up for.</p>
-        <div class="fountain-total"><span>Coins in the fountain</span><b>${FP.formatCoins(f.coins)}</b>
-          <span>${f.tosses === 1 ? "from 1 toss" : "from " + FP.formatCoins(f.tosses) + " tosses"}</span></div>
-        <p class="modal-sub">You have ${coin}<b>${FP.formatCoins(state.coins)}</b> coins.</p>
-        <div class="moves toss">${amounts.map(n => `<button class="btn btn-gold" data-toss="${n}" ${state.coins < n ? "disabled" : ""}>Toss ${FP.formatCoins(n)}</button>`).join("")}</div>`;
+      body = `<canvas id="wish" class="wish" width="1200" height="680"></canvas>
+        <div class="moves"><button class="btn btn-gold" data-toss ${state.coins < 1 ? "disabled" : ""}>Toss a coin</button></div>
+        <p class="modal-sub center">Make a wish. Each toss costs one coin.</p>`;
     } else if (m.id === "casino") {
       if (m.step === "pick") {
         body = `<p class="modal-sub">Pick a crop from your basket to bet. Win and its value goes up. Lose and its value is cut in half, but you keep it. Each crop can only be bet once.</p>
@@ -603,16 +803,15 @@
     if (!el || el.disabled) return;
     if (el.hasAttribute("data-close")) return town.closeModal();
     if (el.dataset.back) { m.step = el.dataset.back; m.result = null; return renderModal(); }
-    if (el.dataset.toss) {
-      const n = Number(el.dataset.toss);
-      if (state.coins < n) return;
-      state.coins -= n;
-      state.fountain.coins += n;
+    if (el.hasAttribute("data-toss")) {
+      if (state.coins < 1) return;
+      state.coins -= 1;
+      state.fountain.coins += 1;
       state.fountain.tosses++;
-      town.tossCoins(n);
-      FP.sfx("coin");
+      town.tossWish();
       town.game.action("townChanged", {});
-      return renderModal();
+      if (state.coins < 1) el.disabled = true; // only the button changes, so the animation keeps going
+      return;
     }
     if (el.dataset.pick !== undefined) {
       const item = m.choices[Number(el.dataset.pick)];

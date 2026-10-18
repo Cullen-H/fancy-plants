@@ -37,17 +37,17 @@
   FP.UNLOCKS = [
     { level: 2,  text: "the Watering Can and your first farm expansion" },
     { level: 3,  text: "Rare seeds and the weather" },
-    { level: 5,  text: "Fertilizer, the Trowel, and the Waterer" },
+    { level: 5,  text: "Fertilizer, the Trowel, and the Waterer's Shed" },
     { level: 6,  text: "a second farm expansion" },
-    { level: 7,  text: "Epic seeds and the Picker" },
+    { level: 7,  text: "Epic seeds and the Picker's Hut" },
     { level: 9,  text: "rainbows, blood moons, and meteor showers" },
-    { level: 10, text: "Storm in a Jar and the Aura Cultivator" },
+    { level: 10, text: "Storm in a Jar and the Cultivation Circle" },
     { level: 11, text: "a third farm expansion" },
     { level: 12, text: "Legendary seeds and Rebirth" },
-    { level: 14, text: "Golden Spray and the Beekeeper" },
+    { level: 14, text: "Golden Spray and the Bee Hive" },
     { level: 15, text: "the last farm expansion" },
     { level: 16, text: "Mythic seeds" },
-    { level: 18, text: "the Shadow Gardener" },
+    { level: 18, text: "the Shadow Manor" },
     { level: 20, text: "a golden frame for your farm" },
   ];
 
@@ -67,7 +67,7 @@
     { name: "Growth",  color: "#6ee36e" },
     { name: "Market",  color: "#ffd23f" },
     { name: "Luck",    color: "#ff7ad9" },
-    { name: "Workers", color: "#5ec8ff" },
+    { name: "Buildings", color: "#5ec8ff" },
   ];
 
   // tier 1 skills sit next to the black hole. tier 2 skills need their branch's tier 1 skill first.
@@ -82,9 +82,9 @@
     { id: "lucky",     branch: 2, tier: 1, name: "Lucky Soil",    max: 4, cost: 2, desc: "Golden and Prismatic plants are 50% more likely for each level." },
     { id: "storm",     branch: 2, tier: 2, name: "Storm Chaser",  max: 4, cost: 1, desc: "Weather changes plants 20% more often for each level." },
     { id: "owl",       branch: 2, tier: 2, name: "Night Owl",     max: 2, cost: 2, desc: "Plants become Moonlit at night twice as often for each level." },
-    { id: "hustle",    branch: 3, tier: 1, name: "Hard Workers",  max: 4, cost: 2, desc: "Workers do their jobs 10% faster for each level." },
-    { id: "headstart", branch: 3, tier: 2, name: "Head Start",    max: 2, cost: 3, desc: "Every new run starts with a Waterer, and at level 2 a Picker too." },
-    { id: "jobboard",  branch: 3, tier: 2, name: "Job Board",     max: 3, cost: 2, desc: "Rare workers look for work 30% more often for each level." },
+    { id: "hustle",    branch: 3, tier: 1, name: "Busy Buildings", max: 4, cost: 2, desc: "Buildings do their jobs 10% faster for each level." },
+    { id: "headstart", branch: 3, tier: 2, name: "Head Start",    max: 2, cost: 3, desc: "Every new run starts with a Waterer's Shed, and at level 2 a Picker's Hut too." },
+    { id: "jobboard",  branch: 3, tier: 2, name: "Builder's Board", max: 3, cost: 2, desc: "Rare buildings show up in the shop 30% more often for each level." },
   ];
   FP.SKILL_BY_ID = {};
   FP.SKILLS.forEach(s => { FP.SKILL_BY_ID[s.id] = s; });

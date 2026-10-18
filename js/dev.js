@@ -26,7 +26,7 @@
     { group: "Shops", items: [
       ["Restock all shops", g => { const now = Date.now(); FP.refreshShop(g.state, now); FP.refreshToolShop(g.state, now); FP.refreshWorkerShop(g.state, now); }],
       ["Every tool, 5 uses", g => FP.TOOLS.forEach(t => { g.state.tools[t.id] = (g.state.tools[t.id] || 0) + 5; })],
-      ["One of each worker", g => FP.WORKERS.forEach(w => g.state.workerBag.push({ workerId: w.id, level: 1 }))],
+      ["One of each building", g => FP.WORKERS.forEach(w => g.state.workerBag.push({ workerId: w.id, level: 1 }))],
     ] },
     { group: "Rebirth and Town", items: [
       ["+10 GMO Points", g => { g.state.rebirth.gmo += 10; }],

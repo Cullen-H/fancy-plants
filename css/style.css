@@ -964,3 +964,20 @@ html, body {
 .gh-bar i { display: block; height: 100%; background: #8be04e; }
 .gh-controls { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .gh-seg { margin-bottom: 6px; }
+
+/* ---------- Phase 12: Request Board ---------- */
+.modal-box.modal-requests { width: 680px; border-color: #a0703f; }
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; background: #c99a5b; border: 4px solid #7a4e2d; border-radius: 12px; }
+.note { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 12px 12px; background: #fffbe9; border-radius: 4px; box-shadow: 0 4px 8px rgba(40, 20, 8, 0.3); transform: rotate(var(--tilt, 0deg)); }
+.note::before { content: ""; position: absolute; top: 5px; left: 50%; width: 10px; height: 10px; margin-left: -5px; background: #e5533d; border-radius: 50%; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3); }
+.note-top { display: flex; align-items: center; gap: 8px; }
+.note-top img { width: 40px; height: 40px; }
+.note-top div { display: flex; flex-direction: column; }
+.note-top b { font-family: var(--font-display); font-size: 17px; }
+.note-pay { font-size: 14px; font-weight: 700; color: #2f7d32; }
+.note p { margin: 0; font-size: 14px; line-height: 1.35; }
+.note-time { font-size: 12px; color: var(--ink-soft); }
+.note .btn { align-self: flex-start; }
+.note .btn .coin-icon { display: inline-block; }
+.empty-note { justify-content: center; min-height: 150px; background: rgba(255, 251, 233, 0.6); }
+.empty-note p { color: var(--ink-soft); text-align: center; }

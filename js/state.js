@@ -1,7 +1,7 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 8;
+  const SAVE_VERSION = 9;
 
   const newStats = () => ({ planted: 0, harvested: 0, earned: 0, runEarned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
@@ -34,6 +34,7 @@
       special: { unlocked: {} },                        // special seeds unlocked through Seed Shop quests
       tileKits: {},                                     // tile kind to count
       fences: 0,                                        // Picket Fences waiting to be placed
+      requests: [],                                     // Request Board notes, or { emptyUntil } for an empty spot
     };
     // Every floor has its own plots, buildings, and tiles. state.plots, state.buildings, and
     // state.tiles always point at the floor that is showing.
@@ -74,6 +75,7 @@
   // Version 4 added goals, more stats, and the tutorial. Version 5 added tool and worker restocks.
   // Version 6 added farm levels and rebirth. Version 7 added farm floors.
   // Version 8 added special seeds, tiles, the Green House, and Picket Fences.
+  // Version 9 added the Request Board.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
@@ -176,6 +178,14 @@
     for (const id in (d.special && d.special.unlocked) || {}) if (FP.QUESTS[id]) s.special.unlocked[id] = true;
     s.tileKits = cleanCounts(d.tileKits, FP.TILES);
     s.fences = Math.max(0, Math.floor(num(d.fences, 0)));
+    s.requests = (Array.isArray(d.requests) ? d.requests : []).slice(0, 4).map(r => {
+      if (!r) return null;
+      if (Number.isFinite(r.emptyUntil)) return { emptyUntil: r.emptyUntil };
+      const okSeed = r.seedId === null || FP.SEED_BY_ID[r.seedId];
+      const okMod = r.mod === null || FP.MODS[r.mod];
+      if (typeof r.who !== "string" || !okSeed || !okMod || (!r.seedId && !r.mod) || !Number.isFinite(r.mult) || !Number.isFinite(r.expiresAt)) return null;
+      return { who: r.who, why: String(r.why || "just because"), seedId: r.seedId, mod: r.mod, mult: r.mult, expiresAt: r.expiresAt };
+    });
 
     for (const [key, valid] of [["toolShop", FP.TOOL_BY_ID], ["workerShop", FP.WORKER_BY_ID]]) {
       const shop = d[key];

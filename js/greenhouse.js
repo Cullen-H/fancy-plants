@@ -73,7 +73,7 @@
 
   // Refreshed every second while open, so timers count down.
   gh.tick = function () {
-    if (gh.open) gh.render();
+    if (gh.open && !FP.pointerDown) gh.render();
   };
 
   function onClick(e) {

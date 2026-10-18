@@ -64,6 +64,8 @@ Phase 10 is done. The skill tree has a fifth branch, Land. Wide Fields raises th
 
 Phase 11 is done. The Seed Shop took the top left spot in the Town. It has six special seeds, and each one goes on sale for good after a delivery quest. The Cactus Pear needs sand and the Lotus needs water, and the Seed Shop sells kits that turn any empty plot into either one. The Truffle Root waits as a sprout until it gets Fertilizer. The Giant Pumpkin covers 2 by 2 plots. The Frost Orchid and the Ember Pepper only grow in a Green House set to the right temperature and humidity. The Green House is a building that takes one plot and opens to a 3 by 3 grid that the weather can't reach. The Picket Fence goes around a plant so the Picker leaves it alone, and it wraps the whole Giant Pumpkin. Unlocked special seeds stay unlocked through rebirths.
 
+Phase 12 is done. The Request Board stands on the right side of the Town plaza with four notes pinned to it. Each note asks for a crop, sometimes with a modifier, and sometimes for any crop with a certain modifier. Handing one over pays the crop's value times the note's multiplier, which runs from about x1.5 for plain requests to x5 or more for ones that ask for a modifier. The best matching crop in the basket goes, since it pays the most. Notes come down after 12 minutes, and an empty spot gets a new note 90 seconds later. Requests only ask for crops and modifiers the farm can get at its level.
+
 ## Later phases
 
 | Phase | What gets added |

@@ -64,7 +64,7 @@
     { id: "casino",  name: "Casino",          cx: 655,  base: 272, dw: 320, dh: 300, k: 0.62, open: true },
     { id: "weather", name: "Weather Station", cx: 935,  base: 312, dw: 280, dh: 280, k: 0.58, open: true },
     { id: "soon2",   name: "Coming Soon",     cx: 190,  base: 490, dw: 200, dh: 230, k: 0.78, open: false },
-    { id: "soon3",   name: "Coming Soon",     cx: 1090, base: 505, dw: 210, dh: 200, k: 0.78, open: false },
+    { id: "requests", name: "Request Board",  cx: 1090, base: 505, dw: 210, dh: 200, k: 0.78, open: true },
     { id: "soon4",   name: "Coming Soon",     cx: 425,  base: 672, dw: 240, dh: 190, k: 0.78, open: false },
     { id: "soon5",   name: "Coming Soon",     cx: 640,  base: 695, dw: 120, dh: 230, k: 0.75, open: false },
     { id: "soon6",   name: "Coming Soon",     cx: 830,  base: 668, dw: 180, dh: 210, k: 0.8,  open: false },
@@ -259,6 +259,47 @@
     ctx.fill();
   }
 
+  // A covered notice board on two posts, with notes pinned to it.
+  function drawRequestBoard(ctx, b, t) {
+    const w = b.dw, h = b.dh, top = -h;
+    for (const x of [18, w - 30]) {
+      FP.roundRect(ctx, x, top + 40, 14, h - 40, 3);
+      outlined(ctx, "#7a4e2d", 2);
+    }
+    ctx.beginPath();
+    ctx.moveTo(-6, top + 44);
+    ctx.lineTo(w / 2, top);
+    ctx.lineTo(w + 6, top + 44);
+    ctx.closePath();
+    outlined(ctx, "#a0703f");
+    FP.roundRect(ctx, 6, top + 50, w - 12, h - 100, 6);
+    outlined(ctx, "#c99a5b");
+    const state = town.game.state;
+    for (let i = 0; i < 4; i++) {
+      const req = state.requests[i];
+      if (!req || !req.who) continue;
+      const nx = 22 + (i % 2) * (w / 2 - 12), ny = top + 62 + Math.floor(i / 2) * 50;
+      ctx.save();
+      ctx.translate(nx + 36, ny + 20);
+      ctx.rotate([-0.06, 0.05, 0.04, -0.05][i]);
+      FP.roundRect(ctx, -36, -20, 72, 42, 3);
+      outlined(ctx, "#fffbe9", 1.5);
+      ctx.fillStyle = "rgba(60,40,20,0.35)";
+      for (let l = 0; l < 3; l++) ctx.fillRect(-26, -8 + l * 9, 52 - l * 10, 2);
+      ctx.beginPath();
+      ctx.arc(0, -16, 3.5, 0, TAU);
+      ctx.fillStyle = "#e5533d";
+      ctx.fill();
+      ctx.restore();
+    }
+    FP.roundRect(ctx, w / 2 - 70, -40, 140, 30, 6);
+    outlined(ctx, "#fff4d6", 2);
+    ctx.font = "700 17px " + FP.displayFont();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#7a4e2d";
+    ctx.fillText("Requests", w / 2, -19);
+  }
+
   function drawSoon(ctx, b) {
     const w = b.dw, h = b.dh, top = -h;
     FP.roundRect(ctx, 0, top, w, h, 6);
@@ -306,6 +347,7 @@
     if (b.id === "casino") drawCasino(ctx, b, t);
     else if (b.id === "weather") drawStation(ctx, b, t);
     else if (b.id === "seedshop") drawSeedShop(ctx, b, t);
+    else if (b.id === "requests") drawRequestBoard(ctx, b, t);
     else drawSoon(ctx, b);
     ctx.restore();
   }
@@ -788,7 +830,9 @@
     const state = town.game.state;
     const m = town.modal;
     let body = "";
-    if (m.id === "seedshop") {
+    if (m.id === "requests") {
+      body = requestBody(state);
+    } else if (m.id === "seedshop") {
       body = seedShopBody(state);
     } else if (m.id === "fountain") {
       body = `<canvas id="wish" class="wish" width="1200" height="680"></canvas>
@@ -825,7 +869,7 @@
       }
     }
     town.modalEl.innerHTML = `<div class="modal-box modal-${m.id}">
-        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain", seedshop: "Seed Shop" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
+        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain", seedshop: "Seed Shop", requests: "Request Board" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
         ${body}
       </div>`;
     if (m.id === "weather") drawWeatherman(m.step === "spin");
@@ -841,6 +885,7 @@
     if (el.hasAttribute("data-close")) return town.closeModal();
     if (el.dataset.back) { m.step = el.dataset.back; m.result = null; return renderModal(); }
     if (el.dataset.shop) return seedShopClick(state, el.dataset.shop, el.dataset.id);
+    if (el.dataset.request !== undefined) return requestClick(state, Number(el.dataset.request), el);
     if (el.hasAttribute("data-toss")) {
       if (state.coins < 1) return;
       state.coins -= 1;
@@ -960,6 +1005,56 @@
     FP.ui.renderHotbar();
     renderModal();
   }
+
+  // ---------- Request Board ----------
+
+  function requestBody(state) {
+    const now = Date.now();
+    const notes = [];
+    for (let i = 0; i < FP.REQUEST_SLOTS; i++) {
+      const req = state.requests[i];
+      if (!req || !req.who) {
+        const wait = req && req.emptyUntil ? FP.formatClock(req.emptyUntil - now) : "a moment";
+        notes.push(`<div class="note empty-note"><p>A new request will be pinned up in ${wait}.</p></div>`);
+        continue;
+      }
+      const best = FP.bestForRequest(state, req);
+      const seed = req.seedId ? FP.SEED_BY_ID[req.seedId] : null;
+      notes.push(`<div class="note" style="--tilt:${[-1.2, 1, 0.8, -1][i]}deg">
+        <div class="note-top">
+          ${seed ? `<img src="${FP.seedIconURL(seed)}" alt="">` : ""}
+          <div><b>${req.who}</b><span class="note-pay">Pays x${req.mult}</span></div>
+        </div>
+        <p>${FP.requestText(req)}</p>
+        ${req.mod ? `<div class="mods">${FP.ui.modTag(req.mod)}</div>` : ""}
+        <span class="note-time">Comes down in ${FP.formatClock(req.expiresAt - now)}</span>
+        ${best
+          ? `<button class="btn btn-gold" data-request="${i}">Hand over for ${coin}${FP.formatCoins(FP.requestPayout(state, req, best))}</button>`
+          : `<button class="btn" disabled>You don't have one yet</button>`}
+      </div>`);
+    }
+    return `<p class="modal-sub">Townsfolk pin up what they're looking for. Hand one over and they pay its value times the number on the note. If you have more than one that fits, the most valuable one goes, since it pays the most.</p>
+      <div class="notes">${notes.join("")}</div>`;
+  }
+
+  function requestClick(state, i, el) {
+    const from = FP.renderer.centerOf(el);
+    const res = FP.fulfillRequest(state, i, Date.now());
+    if (res.error) {
+      FP.sfx("error");
+      town.game.toast(res.error);
+      return renderModal();
+    }
+    FP.sfx("goal");
+    town.game.toast(res.req.who + " paid you " + FP.formatCoins(res.coins) + " coins for the " + FP.SEED_BY_ID[res.item.seedId].name + ".");
+    town.game.action("requestPaid", { coins: res.coins, x: from.x, y: from.y });
+    renderModal();
+  }
+
+  // Keeps timers on the notes ticking while the board is open.
+  town.tickRequests = function () {
+    if (town.modal && town.modal.id === "requests" && !FP.pointerDown) renderModal();
+  };
 
   // ---------- Casino games ----------
 

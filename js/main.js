@@ -262,6 +262,22 @@
       ui.refresh();
     },
 
+    // Coins from the Request Board fly up to the counter.
+    requestPaid(d) {
+      const from = { x: Number(d.x), y: Number(d.y) };
+      const to = ui.coinTarget();
+      ui.holdCoinsUntil = Date.now() + 550;
+      for (let i = 0; i < 10; i++) {
+        FP.fx.fly({
+          from: { x: from.x + (Math.random() - 0.5) * 60, y: from.y }, to, delay: i * 0.05, dur: 0.6, lift: 80,
+          draw: FP.drawCoin, size: 1.1, endSize: 0.8,
+          onArrive: () => { ui.bumpCoins(); FP.sfx("coin"); },
+        });
+      }
+      ui.refreshTab("sell");
+      FP.save(state);
+    },
+
     // A crop harvested somewhere other than a farm plot, like the Green House.
     cropHarvested(d) {
       const seed = FP.SEED_BY_ID[d.seedId];
@@ -857,6 +873,8 @@
         nextGreenhouse = now + 1000;
         FP.greenhouseTick(state, now);
         FP.greenhouseMenu.tick();
+        FP.updateRequests(state, now);
+        FP.town.tickRequests();
       }
       tutorial.tick(now);
       checkGoals();

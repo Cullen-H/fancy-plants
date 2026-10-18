@@ -61,6 +61,13 @@ window.FP = window.FP || {};
   };
   FP.refreshFont = () => { fontFamily = null; };
 
+  // True while a mouse button or finger is pressed. Menus that redraw on a timer wait for it,
+  // because redrawing in the middle of a click would swallow the click.
+  FP.pointerDown = false;
+  window.addEventListener("pointerdown", () => { FP.pointerDown = true; }, true);
+  window.addEventListener("pointerup", () => { FP.pointerDown = false; }, true);
+  window.addEventListener("pointercancel", () => { FP.pointerDown = false; }, true);
+
   FP.withArticle = name => (/^[aeiou]/i.test(name) ? "an " : "a ") + name;
 
   FP.countOf = (seed, n) => n === 1 ? "1 " + seed.name : n + " " + seed.plural;

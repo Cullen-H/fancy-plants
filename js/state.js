@@ -28,6 +28,7 @@
       tutorial: 0,                                      // step of the first time tutorial, or -1 when done
       xp: 0,                                            // total XP this run; the farm level comes from it
       rebirth: { count: 0, gmo: 0, earnedGmo: 0, skills: {}, townSeen: false, townVisited: false },
+      fountain: { coins: 0, tosses: 0 },                // coins tossed into the Town fountain, kept forever
     };
   };
 
@@ -171,6 +172,8 @@
       townSeen: rb.townSeen === true,
       townVisited: rb.townVisited === true,
     };
+    const fountain = d.fountain || {};
+    s.fountain = { coins: Math.max(0, num(fountain.coins, 0)), tosses: Math.max(0, Math.floor(num(fountain.tosses, 0))) };
     for (const id in rb.skills || {}) {
       if (FP.SKILL_BY_ID[id]) s.rebirth.skills[id] = FP.clamp(Math.floor(num(rb.skills[id], 0)), 0, FP.SKILL_BY_ID[id].max);
     }

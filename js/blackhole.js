@@ -6,7 +6,7 @@
   const RING1 = 150, RING2 = 255;  // distance of tier 1 and tier 2 skills from the center
   const BRANCH_ANGLE = [-135, -45, 45, 135].map(d => d * Math.PI / 180); // top left, top right, bottom right, bottom left
 
-  const hole = FP.blackHole = { open: false, selected: null, intro: null, stars: [] };
+  const hole = FP.blackHole = { open: false, selected: null, intro: null, stars: [], scale: 1 };
 
   // Each skill's spot on the screen.
   function skillPos(skill) {
@@ -111,6 +111,7 @@
 
   hole.draw = function (now) {
     if (!hole.open) return;
+    if (!hole.canvas.width) hole.resize(hole.scale || 1);
     const ctx = hole.ctx;
     const t = now / 1000;
     ctx.setTransform(hole.scale, 0, 0, hole.scale, 0, 0);

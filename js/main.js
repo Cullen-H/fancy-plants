@@ -736,55 +736,60 @@
   }
 
   function frame(ts) {
-    const dt = Math.min(0.05, (ts - last) / 1000);
-    last = ts;
-    const now = Date.now();
+    // One bad frame shouldn't freeze the game, so errors get logged and the loop keeps going.
+    try {
+      const dt = Math.min(0.05, (ts - last) / 1000);
+      last = ts;
+      const now = Date.now();
 
-    // Tools and workers restock quietly, except that rare ones get a message.
-    if (now >= state.toolShop.nextRefresh) {
-      FP.refreshToolShop(state, now);
-      const rare = state.toolShop.stock.map(s => FP.TOOL_BY_ID[s.id]).filter(t => t.rarity >= 2).pop();
-      if (rare) toast("The tool shop has " + FP.withArticle(rare.name) + " in stock.");
-      ui.refreshTab("shop");
-    }
-    if (now >= state.workerShop.nextRefresh) {
-      FP.refreshWorkerShop(state, now);
-      const rare = state.workerShop.stock.map(s => FP.WORKER_BY_ID[s.id]).filter(w => w.rarity >= 2).pop();
-      if (rare) toast(FP.withArticle(rare.name).replace(/^./, c => c.toUpperCase()) + " is looking for work in the shop.");
-      ui.refreshTab("shop");
-    }
-    if (now >= state.shop.nextRefresh) {
-      FP.refreshShop(state, now);
-      toast("The seed shop has new stock.");
-      ui.refreshTab("shop");
-    }
-
-    if (now >= nextCheck) {
-      nextCheck = now + 2000;
-      if (view.pendingDig && now > view.pendingDig.until) view.pendingDig = null;
-      if (FP.isStuck(state)) {
-        state.seeds.carrot = 1;
-        toast("A neighbor saw your empty farm and left you a Carrot seed.");
-        ui.renderHotbar();
+      // Tools and workers restock quietly, except that rare ones get a message.
+      if (now >= state.toolShop.nextRefresh) {
+        FP.refreshToolShop(state, now);
+        const rare = state.toolShop.stock.map(s => FP.TOOL_BY_ID[s.id]).filter(t => t.rarity >= 2).pop();
+        if (rare) toast("The tool shop has " + FP.withArticle(rare.name) + " in stock.");
+        ui.refreshTab("shop");
       }
+      if (now >= state.workerShop.nextRefresh) {
+        FP.refreshWorkerShop(state, now);
+        const rare = state.workerShop.stock.map(s => FP.WORKER_BY_ID[s.id]).filter(w => w.rarity >= 2).pop();
+        if (rare) toast(FP.withArticle(rare.name).replace(/^./, c => c.toUpperCase()) + " is looking for work in the shop.");
+        ui.refreshTab("shop");
+      }
+      if (now >= state.shop.nextRefresh) {
+        FP.refreshShop(state, now);
+        toast("The seed shop has new stock.");
+        ui.refreshTab("shop");
+      }
+
+      if (now >= nextCheck) {
+        nextCheck = now + 2000;
+        if (view.pendingDig && now > view.pendingDig.until) view.pendingDig = null;
+        if (FP.isStuck(state)) {
+          state.seeds.carrot = 1;
+          toast("A neighbor saw your empty farm and left you a Carrot seed.");
+          ui.renderHotbar();
+        }
+      }
+
+      updateWeather(now);
+      updateTime(now);
+      tutorial.tick(now);
+      checkGoals();
+      checkLevel();
+      FP.runWorkers(state, now, onWorkerEvent);
+      announceLucky();
+      if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
+
+      view.tool = ui.tool;
+      view.selected = ui.selected;
+      updateHeld();
+      ui.tick(now, dt);
+      FP.renderer.draw(state, now, dt, view);
+      FP.blackHole.draw(now);
+      FP.town.draw(now);
+    } catch (err) {
+      console.error(err);
     }
-
-    updateWeather(now);
-    updateTime(now);
-    tutorial.tick(now);
-    checkGoals();
-    checkLevel();
-    FP.runWorkers(state, now, onWorkerEvent);
-    announceLucky();
-    if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
-
-    view.tool = ui.tool;
-    view.selected = ui.selected;
-    updateHeld();
-    ui.tick(now, dt);
-    FP.renderer.draw(state, now, dt, view);
-    FP.blackHole.draw(now);
-    FP.town.draw(now);
     requestAnimationFrame(frame);
   }
 

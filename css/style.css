@@ -893,3 +893,11 @@ html, body {
 .dev-group b { width: 100%; }
 .dev-group button, .dev-group select { padding: 4px 8px; font: inherit; background: #fff; border: 1px solid #c9ad83; border-radius: 6px; cursor: pointer; }
 .dev-group button:hover { background: #ffe9a8; }
+
+.modal-box.modal-fountain { border-color: #2f8fb0; }
+.fountain-total { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 8px 0; padding: 14px; background: #e6f6ff; border: 2px solid #5ab0e8; border-radius: 14px; }
+.fountain-total b { font-family: var(--font-display); font-size: 40px; color: #24507a; }
+.fountain-total span { font-size: 14px; color: var(--ink-soft); }
+.moves.toss { flex-wrap: wrap; }
+.moves.toss .btn { min-width: 0; }
+.modal-sub .coin-icon { display: inline-block; vertical-align: -2px; margin: 0 3px; }

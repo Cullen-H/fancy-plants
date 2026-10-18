@@ -2,7 +2,7 @@
 // and a Weather Station where a crop buys a say in the next weather.
 (function (FP) {
   const TAU = FP.TAU;
-  const W = 1280, H = 720, STREET = 560;
+  const W = 1280, H = 720;
 
   // ---------- Rules ----------
 
@@ -52,15 +52,33 @@
   };
 
   // ---------- Town screen ----------
+  // The Town is a round plaza with a fountain in the middle and buildings around the edge.
+  // Each building is drawn at a "design" size and scaled down by k to fit its spot.
+  // cx and base are where the middle of its front wall meets the ground.
+
+  const PLAZA = { x: 640, y: 430, rx: 450, ry: 165 };
+  const FOUNTAIN = { x: 600, y: 425 };
 
   const BUILDINGS = [
-    { id: "casino",  name: "Casino",          x: 80,   w: 320, h: 300, open: true },
-    { id: "weather", name: "Weather Station", x: 460,  w: 280, h: 280, open: true },
-    { id: "soon1",   name: "Coming Soon",     x: 800,  w: 200, h: 220, open: false },
-    { id: "soon2",   name: "Coming Soon",     x: 1040, w: 200, h: 250, open: false },
+    { id: "soon1",   name: "Coming Soon",     cx: 370,  base: 292, dw: 200, dh: 220, k: 0.72, open: false },
+    { id: "casino",  name: "Casino",          cx: 655,  base: 272, dw: 320, dh: 300, k: 0.62, open: true },
+    { id: "weather", name: "Weather Station", cx: 935,  base: 312, dw: 280, dh: 280, k: 0.58, open: true },
+    { id: "soon2",   name: "Coming Soon",     cx: 190,  base: 490, dw: 200, dh: 230, k: 0.78, open: false },
+    { id: "soon3",   name: "Coming Soon",     cx: 1090, base: 505, dw: 210, dh: 200, k: 0.78, open: false },
+    { id: "soon4",   name: "Coming Soon",     cx: 425,  base: 672, dw: 240, dh: 190, k: 0.78, open: false },
+    { id: "soon5",   name: "Coming Soon",     cx: 640,  base: 695, dw: 120, dh: 230, k: 0.75, open: false },
+    { id: "soon6",   name: "Coming Soon",     cx: 830,  base: 668, dw: 180, dh: 210, k: 0.8,  open: false },
   ];
 
-  const town = FP.town = { open: false, hover: null, modal: null };
+  // The box on screen a building covers, for hovering and clicking.
+  function hitBox(b) {
+    const w = b.dw * b.k, h = (b.dh + (b.id === "weather" ? 40 : 0)) * b.k;
+    return { x: b.cx - w / 2, y: b.base - h, w, h };
+  }
+
+  const inFountain = p => Math.pow((p.x - FOUNTAIN.x) / 85, 2) + Math.pow((p.y - FOUNTAIN.y + 25) / 60, 2) < 1;
+
+  const town = FP.town = { open: false, hover: null, modal: null, tossed: [], scale: 1 };
 
   town.init = function (game) {
     town.game = game;
@@ -71,10 +89,16 @@
 
     town.canvas.addEventListener("pointermove", e => {
       const p = FP.renderer.toGame(e.clientX, e.clientY);
-      town.hover = BUILDINGS.find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= STREET - b.h - 40 && p.y <= STREET) || null;
+      // Buildings closer to the front are checked first, since they sit on top.
+      const front = BUILDINGS.slice().sort((a, b) => b.base - a.base);
+      town.hover = front.find(b => {
+        const r = hitBox(b);
+        return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+      }) || (inFountain(p) ? { id: "fountain", name: "Fountain", open: true } : null);
       town.canvas.style.cursor = town.hover ? "pointer" : "default";
     });
-    town.canvas.addEventListener("pointerdown", () => {
+    town.canvas.addEventListener("pointerdown", e => {
+      town.canvas.dispatchEvent(new PointerEvent("pointermove", { clientX: e.clientX, clientY: e.clientY }));
       if (!town.hover || town.modal) return;
       if (!town.hover.open) return town.game.toast("This building is still being built. Check back in a later update.");
       FP.sfx("click");
@@ -118,15 +142,18 @@
     outlined(ctx, lit ? "#ffe9a8" : "#bfe6ff", 2);
   }
 
+  // The building functions below draw with (0, 0) at the bottom left corner of the
+  // front wall, at the building's design size. Up is negative y.
+
   function drawCasino(ctx, b, t) {
-    const top = STREET - b.h;
-    FP.roundRect(ctx, b.x, top, b.w, b.h, 8);
+    const w = b.dw, top = -b.dh;
+    FP.roundRect(ctx, 0, top, w, b.dh, 8);
     outlined(ctx, "#7a2a4a");
     // Gold trim and a marquee of blinking lights
-    FP.roundRect(ctx, b.x + 20, top + 20, b.w - 40, 70, 10);
+    FP.roundRect(ctx, 20, top + 20, w - 40, 70, 10);
     outlined(ctx, "#2a0f1f");
     for (let i = 0; i < 18; i++) {
-      const lx = b.x + 28 + i * ((b.w - 56) / 17);
+      const lx = 28 + i * ((w - 56) / 17);
       for (const ly of [top + 26, top + 84]) {
         const on = (Math.floor(t * 4) + i) % 2 === 0;
         ctx.beginPath();
@@ -140,37 +167,35 @@
     ctx.fillStyle = "#ffd23f";
     ctx.shadowColor = "#ff4fa3";
     ctx.shadowBlur = 12 + 6 * Math.sin(t * 3);
-    ctx.fillText("CASINO", b.x + b.w / 2, top + 70);
+    ctx.fillText("CASINO", w / 2, top + 70);
     ctx.shadowBlur = 0;
-    for (let i = 0; i < 3; i++) windowPane(ctx, b.x + 34 + i * 90, top + 120, 60, 50, true);
-    // Double doors
-    FP.roundRect(ctx, b.x + b.w / 2 - 50, STREET - 100, 100, 100, 6);
+    for (let i = 0; i < 3; i++) windowPane(ctx, 34 + i * 90, top + 120, 60, 50, true);
+    FP.roundRect(ctx, w / 2 - 50, -100, 100, 100, 6);
     outlined(ctx, "#3a1424");
     ctx.beginPath();
-    ctx.moveTo(b.x + b.w / 2, STREET - 100);
-    ctx.lineTo(b.x + b.w / 2, STREET);
+    ctx.moveTo(w / 2, -100);
+    ctx.lineTo(w / 2, 0);
     ctx.stroke();
-    // A big gold coin over the door
     ctx.beginPath();
-    ctx.arc(b.x + b.w / 2, STREET - 125, 18, 0, TAU);
+    ctx.arc(w / 2, -125, 18, 0, TAU);
     outlined(ctx, "#f5b82e");
   }
 
   function drawStation(ctx, b, t) {
-    const top = STREET - b.h + 70;
+    const w = b.dw, top = -b.dh + 70;
     // Tower with a spinning dish on top
-    FP.roundRect(ctx, b.x + b.w - 90, top - 90, 50, 100, 4);
+    FP.roundRect(ctx, w - 90, top - 90, 50, 100, 4);
     outlined(ctx, "#dfe8ef");
     ctx.save();
-    ctx.translate(b.x + b.w - 65, top - 100);
+    ctx.translate(w - 65, top - 100);
     ctx.scale(Math.cos(t * 1.5), 1);
     ctx.beginPath();
     ctx.ellipse(0, 0, 26, 12, 0, 0, Math.PI);
     outlined(ctx, "#ffffff");
     ctx.restore();
-    // A weather vane spinning in the wind
+    // A weather vane turning in the wind
     ctx.save();
-    ctx.translate(b.x + 60, top - 30);
+    ctx.translate(60, top - 30);
     ctx.strokeStyle = "#4a2d16";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -182,115 +207,297 @@
     ctx.moveTo(-22, -10); ctx.lineTo(22, -10); ctx.lineTo(14, -18); ctx.moveTo(22, -10); ctx.lineTo(14, -2);
     ctx.stroke();
     ctx.restore();
-    // Main building
-    FP.roundRect(ctx, b.x, top, b.w, STREET - top, 8);
+    FP.roundRect(ctx, 0, top, w, -top, 8);
     outlined(ctx, "#4b8bff");
-    FP.roundRect(ctx, b.x + 16, top + 16, b.w - 32, 44, 8);
+    FP.roundRect(ctx, 16, top + 16, w - 32, 44, 8);
     outlined(ctx, "#f3f8ff", 2);
     ctx.font = "700 24px " + FP.displayFont();
     ctx.textAlign = "center";
     ctx.fillStyle = "#24507a";
-    ctx.fillText("Weather Station", b.x + b.w / 2, top + 46);
-    windowPane(ctx, b.x + 30, top + 80, 70, 56, false);
-    windowPane(ctx, b.x + b.w - 100, top + 80, 70, 56, false);
-    // The weather machine glows through the left window
+    ctx.fillText("Weather Station", w / 2, top + 46);
+    windowPane(ctx, 30, top + 80, 70, 56, false);
+    windowPane(ctx, w - 100, top + 80, 70, 56, false);
     ctx.beginPath();
-    ctx.arc(b.x + 65, top + 108, 12, 0, TAU);
+    ctx.arc(65, top + 108, 12, 0, TAU);
     ctx.fillStyle = `rgba(120,255,200,${0.5 + 0.4 * Math.sin(t * 4)})`;
     ctx.fill();
-    FP.roundRect(ctx, b.x + b.w / 2 - 34, STREET - 90, 68, 90, 6);
+    FP.roundRect(ctx, w / 2 - 34, -90, 68, 90, 6);
     outlined(ctx, "#2f5f8f");
   }
 
   function drawSoon(ctx, b) {
-    const top = STREET - b.h;
-    FP.roundRect(ctx, b.x, top, b.w, b.h, 6);
+    const w = b.dw, h = b.dh, top = -h;
+    FP.roundRect(ctx, 0, top, w, h, 6);
     outlined(ctx, "#b39a7a");
+    // A plain roof so each one reads as a building
+    ctx.beginPath();
+    ctx.moveTo(-10, top + 4);
+    ctx.lineTo(w / 2, top - 40);
+    ctx.lineTo(w + 10, top + 4);
+    ctx.closePath();
+    outlined(ctx, "#8a6a4a");
     // Boards nailed across the front
-    [[0.25, -0.12], [0.5, 0.1], [0.75, -0.08]].forEach(([k, tilt]) => {
+    [[0.25, -0.12], [0.5, 0.1], [0.78, -0.08]].forEach(([k, tilt]) => {
       ctx.save();
-      ctx.translate(b.x + b.w / 2, top + b.h * k);
+      ctx.translate(w / 2, top + h * k);
       ctx.rotate(tilt);
-      FP.roundRect(ctx, -b.w / 2 - 6, -12, b.w + 12, 24, 3);
+      FP.roundRect(ctx, -w / 2 - 6, -12, w + 12, 24, 3);
       outlined(ctx, "#a0703f", 2);
       ctx.restore();
     });
-    FP.roundRect(ctx, b.x + b.w / 2 - 70, top + b.h / 2 - 22, 140, 44, 6);
+    const sw = Math.min(140, w - 14);
+    FP.roundRect(ctx, w / 2 - sw / 2, top + h / 2 - 24, sw, 48, 6);
     outlined(ctx, "#fff4d6", 2);
-    ctx.font = "700 18px " + FP.displayFont();
     ctx.textAlign = "center";
     ctx.fillStyle = "#7a2a1a";
-    ctx.fillText("Coming Soon", b.x + b.w / 2, top + b.h / 2 + 6);
+    if (sw < 130) {
+      ctx.font = "700 17px " + FP.displayFont();
+      ctx.fillText("Coming", w / 2, top + h / 2 - 3);
+      ctx.fillText("Soon", w / 2, top + h / 2 + 16);
+    } else {
+      ctx.font = "700 18px " + FP.displayFont();
+      ctx.fillText("Coming Soon", w / 2, top + h / 2 + 6);
+    }
   }
 
+  function drawBuilding(ctx, b, t) {
+    ctx.save();
+    ctx.translate(b.cx - b.dw * b.k / 2, b.base);
+    ctx.scale(b.k, b.k);
+    // A soft shadow on the ground in front
+    ctx.beginPath();
+    ctx.ellipse(b.dw / 2, 4, b.dw * 0.55, 14, 0, 0, TAU);
+    ctx.fillStyle = "rgba(40,30,20,0.25)";
+    ctx.fill();
+    if (b.id === "casino") drawCasino(ctx, b, t);
+    else if (b.id === "weather") drawStation(ctx, b, t);
+    else drawSoon(ctx, b);
+    ctx.restore();
+  }
+
+  // Stone plaza, seen at an angle so the circle looks like an oval.
+  let plazaCache = null;
+  function drawPlaza(ctx) {
+    if (!plazaCache || plazaCache.scale !== town.scale || !plazaCache.canvas.width) {
+      const c = document.createElement("canvas");
+      c.width = Math.round(W * town.scale);
+      c.height = Math.round(H * town.scale);
+      const g = c.getContext("2d");
+      g.setTransform(town.scale, 0, 0, town.scale, 0, 0);
+      g.beginPath();
+      g.ellipse(PLAZA.x, PLAZA.y + 8, PLAZA.rx, PLAZA.ry, 0, 0, TAU);
+      g.fillStyle = "rgba(40,30,20,0.25)";
+      g.fill();
+      g.beginPath();
+      g.ellipse(PLAZA.x, PLAZA.y, PLAZA.rx, PLAZA.ry, 0, 0, TAU);
+      g.fillStyle = "#d8c8a8";
+      g.fill();
+      g.lineWidth = 6;
+      g.strokeStyle = "#a8957a";
+      g.stroke();
+      // Rings of paving stones
+      g.lineWidth = 1.5;
+      g.strokeStyle = "rgba(120,100,75,0.35)";
+      for (let i = 1; i <= 5; i++) {
+        g.beginPath();
+        g.ellipse(PLAZA.x, PLAZA.y, PLAZA.rx * i / 6, PLAZA.ry * i / 6, 0, 0, TAU);
+        g.stroke();
+      }
+      const rand = FP.rng(31);
+      for (let i = 0; i < 260; i++) {
+        const a = rand() * TAU, r = Math.sqrt(rand());
+        g.beginPath();
+        g.ellipse(PLAZA.x + Math.cos(a) * r * PLAZA.rx * 0.97, PLAZA.y + Math.sin(a) * r * PLAZA.ry * 0.97, 3 + rand() * 4, 2 + rand() * 2, 0, 0, TAU);
+        g.fillStyle = rand() < 0.5 ? "rgba(150,130,100,0.35)" : "rgba(240,230,210,0.5)";
+        g.fill();
+      }
+      plazaCache = { canvas: c, scale: town.scale };
+    }
+    ctx.drawImage(plazaCache.canvas, 0, 0, W, H);
+  }
+
+  function drawFountain(ctx, t, hovered) {
+    const { x, y } = FOUNTAIN;
+    if (hovered) {
+      const glow = ctx.createRadialGradient(x, y - 20, 10, x, y - 20, 120);
+      glow.addColorStop(0, "rgba(255,240,170,0.5)");
+      glow.addColorStop(1, "rgba(255,240,170,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(x - 130, y - 140, 260, 220);
+    }
+    // Basin
+    ctx.beginPath();
+    ctx.ellipse(x, y + 6, 82, 30, 0, 0, TAU);
+    ctx.fillStyle = "rgba(40,30,20,0.25)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x, y, 80, 28, 0, 0, TAU);
+    outlined(ctx, "#b9b2a6");
+    ctx.beginPath();
+    ctx.ellipse(x, y - 4, 66, 20, 0, 0, TAU);
+    outlined(ctx, "#5ab0e8", 2);
+    // Ripples
+    for (let i = 0; i < 3; i++) {
+      const k = ((t * 0.6 + i / 3) % 1);
+      ctx.beginPath();
+      ctx.ellipse(x, y - 4, 18 + k * 44, 6 + k * 13, 0, 0, TAU);
+      ctx.strokeStyle = `rgba(255,255,255,${0.5 * (1 - k)})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    // Coins glinting at the bottom, more of them the more you've tossed in
+    const shown = Math.min(18, Math.ceil(Math.log10((town.game.state.fountain.coins || 0) + 1) * 4));
+    const rand = FP.rng(5);
+    for (let i = 0; i < shown; i++) {
+      const a = rand() * TAU, r = 0.3 + rand() * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(x + Math.cos(a) * 58 * r, y - 4 + Math.sin(a) * 15 * r, 3.5, 2, 0, 0, TAU);
+      ctx.fillStyle = (Math.sin(t * 3 + i) > 0.6) ? "#fff3a0" : "#f5b82e";
+      ctx.fill();
+    }
+    // Center column and top bowl
+    FP.roundRect(ctx, x - 8, y - 62, 16, 58, 4);
+    outlined(ctx, "#c9c2b6", 2);
+    ctx.beginPath();
+    ctx.ellipse(x, y - 62, 26, 8, 0, 0, TAU);
+    outlined(ctx, "#c9c2b6", 2);
+    // Water arcing out of the top bowl
+    ctx.fillStyle = "rgba(170,220,255,0.9)";
+    for (let s = 0; s < 6; s++) {
+      const a = s / 6 * TAU;
+      for (let i = 0; i < 5; i++) {
+        const k = ((t * 0.9 + i / 5) % 1);
+        const px = x + Math.cos(a) * (8 + k * 46);
+        const py = y - 66 + Math.sin(a) * (3 + k * 12) - Math.sin(k * Math.PI) * 26 + k * 50;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.2, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Coins flying from the bottom of the screen into the fountain.
+  function drawTossed(ctx, dt) {
+    town.tossed = town.tossed.filter(c => (c.age += dt) < c.dur + 0.5);
+    for (const c of town.tossed) {
+      const k = Math.min(1, c.age / c.dur);
+      if (k < 1) {
+        const x = c.from + (FOUNTAIN.x + c.off - c.from) * k;
+        const y = 720 + (FOUNTAIN.y - 8 - 720) * k - Math.sin(k * Math.PI) * 180;
+        FP.drawCoin(ctx, x, y, 0.9);
+      } else {
+        const s = (c.age - c.dur) / 0.5;
+        ctx.beginPath();
+        ctx.ellipse(FOUNTAIN.x + c.off, FOUNTAIN.y - 6, 6 + s * 22, 2 + s * 7, 0, 0, TAU);
+        ctx.strokeStyle = `rgba(255,255,255,${0.8 * (1 - s)})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Townsfolk walking laps around the fountain.
   const folks = [
-    { shirt: "#e8412c", speed: 38, offset: 0 },
-    { shirt: "#4bb8ff", speed: -30, offset: 600 },
-    { shirt: "#9b59f0", speed: 24, offset: 900 },
+    { shirt: "#e8412c", speed: 0.12, offset: 0 },
+    { shirt: "#4bb8ff", speed: -0.09, offset: 2.1 },
+    { shirt: "#9b59f0", speed: 0.07, offset: 4.2 },
+    { shirt: "#6ee36e", speed: -0.11, offset: 5.4 },
   ];
 
+  let lastDraw = 0;
   town.draw = function (now) {
     if (!town.open) return;
+    // A page opened in the background can start with a canvas of size 0.
+    if (!town.canvas.width) town.resize(town.scale || 1);
     const ctx = town.ctx;
     const t = now / 1000;
+    const dt = Math.min(0.05, (now - (lastDraw || now)) / 1000);
+    lastDraw = now;
     ctx.setTransform(town.scale, 0, 0, town.scale, 0, 0);
 
     const night = FP.lightAt(now).dark / 0.42;
-    const sky = ctx.createLinearGradient(0, 0, 0, STREET);
+    const sky = ctx.createLinearGradient(0, 0, 0, 170);
     sky.addColorStop(0, night > 0.5 ? "#1a2350" : "#8fd0ff");
     sky.addColorStop(1, night > 0.5 ? "#3a3f78" : "#d8f1ff");
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, STREET);
-
-    // Rolling hills in the back
-    ctx.fillStyle = "#86c45a";
+    ctx.fillRect(0, 0, W, 170);
+    ctx.fillStyle = "#7fbf55";
     ctx.beginPath();
-    ctx.moveTo(0, STREET - 120);
-    for (let x = 0; x <= W; x += 40) ctx.lineTo(x, STREET - 140 + Math.sin(x / 140) * 30);
-    ctx.lineTo(W, STREET);
-    ctx.lineTo(0, STREET);
+    ctx.moveTo(0, 150);
+    for (let x = 0; x <= W; x += 40) ctx.lineTo(x, 140 + Math.sin(x / 130) * 18);
+    ctx.lineTo(W, H);
+    ctx.lineTo(0, H);
     ctx.fill();
+    const grass = ctx.createLinearGradient(0, 150, 0, H);
+    grass.addColorStop(0, "#8fcd63");
+    grass.addColorStop(1, "#7cbf55");
+    ctx.fillStyle = grass;
+    ctx.fillRect(0, 170, W, H - 170);
 
-    // Sidewalk and street
-    ctx.fillStyle = "#c9b79a";
-    ctx.fillRect(0, STREET, W, 40);
-    ctx.fillStyle = "#6b6460";
-    ctx.fillRect(0, STREET + 40, W, H - STREET - 40);
-    ctx.fillStyle = "#f5e6b8";
-    for (let x = 20; x < W; x += 120) ctx.fillRect(x, STREET + 100, 60, 8);
+    // The road back to the farm comes in from the bottom left corner.
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#8a6339";
+    ctx.lineWidth = 46;
+    ctx.beginPath();
+    ctx.moveTo(-20, 640);
+    ctx.quadraticCurveTo(170, 600, 290, 545);
+    ctx.stroke();
+    ctx.strokeStyle = "#c79a64";
+    ctx.lineWidth = 38;
+    ctx.stroke();
 
-    for (const b of BUILDINGS) {
-      if (town.hover === b) {
-        const glow = ctx.createRadialGradient(b.x + b.w / 2, STREET - b.h / 2, 20, b.x + b.w / 2, STREET - b.h / 2, b.w * 0.8);
-        glow.addColorStop(0, "rgba(255,240,170,0.45)");
+    drawPlaza(ctx);
+
+    // Everything standing on the ground is drawn back to front.
+    const things = BUILDINGS.map(b => ({ y: b.base, draw: () => drawBuilding(ctx, b, t), b }));
+    things.push({ y: FOUNTAIN.y + 20, draw: () => drawFountain(ctx, t, town.hover && town.hover.id === "fountain") });
+    folks.forEach(f => {
+      const a = t * f.speed + f.offset;
+      const x = PLAZA.x + Math.cos(a) * PLAZA.rx * 0.7, y = PLAZA.y + Math.sin(a) * PLAZA.ry * 0.62 + 10;
+      things.push({ y, draw: () => FP.drawPerson(ctx, x, y, 26, f.shirt, t, true) });
+    });
+    things.sort((p, q) => p.y - q.y);
+    for (const thing of things) {
+      if (thing.b && town.hover === thing.b) {
+        const r = hitBox(thing.b);
+        const glow = ctx.createRadialGradient(r.x + r.w / 2, r.y + r.h / 2, 10, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.9);
+        glow.addColorStop(0, "rgba(255,240,170,0.5)");
         glow.addColorStop(1, "rgba(255,240,170,0)");
         ctx.fillStyle = glow;
-        ctx.fillRect(b.x - b.w * 0.3, STREET - b.h - 80, b.w * 1.6, b.h + 80);
+        ctx.fillRect(r.x - r.w * 0.4, r.y - 40, r.w * 1.8, r.h + 60);
       }
-      if (b.id === "casino") drawCasino(ctx, b, t);
-      else if (b.id === "weather") drawStation(ctx, b, t);
-      else drawSoon(ctx, b);
-      if (town.hover === b) {
-        ctx.font = "700 20px " + FP.displayFont();
-        ctx.textAlign = "center";
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = "#3a2717";
-        ctx.strokeText(b.name, b.x + b.w / 2, STREET + 30);
-        ctx.fillStyle = "#fff4d6";
-        ctx.fillText(b.name, b.x + b.w / 2, STREET + 30);
-      }
+      thing.draw();
     }
 
-    // Townsfolk strolling along the sidewalk
-    folks.forEach(f => {
-      const span = W + 200;
-      const x = (((t * f.speed + f.offset) % span) + span) % span - 100;
-      FP.drawPerson(ctx, x, STREET + 34, 30, f.shirt, t, true);
-    });
+    drawTossed(ctx, dt);
 
     if (night > 0.01) {
       ctx.fillStyle = `rgba(16,24,70,${0.3 * night})`;
       ctx.fillRect(0, 0, W, H);
+    }
+
+    // Name of whatever the mouse is over, just above it
+    if (town.hover) {
+      const label = town.hover.name;
+      let lx, ly;
+      if (town.hover.id === "fountain") { lx = FOUNTAIN.x; ly = FOUNTAIN.y - 100; }
+      else { const r = hitBox(town.hover); lx = r.x + r.w / 2; ly = Math.max(96, r.y - 14); }
+      ctx.font = "700 20px " + FP.displayFont();
+      ctx.textAlign = "center";
+      ctx.lineWidth = 5;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#3a2717";
+      ctx.strokeText(label, lx, ly);
+      ctx.fillStyle = "#fff4d6";
+      ctx.fillText(label, lx, ly);
+    }
+  };
+
+  // Called when coins go in, so the fountain can show them flying.
+  town.tossCoins = function (count) {
+    const n = Math.min(12, count);
+    for (let i = 0; i < n; i++) {
+      town.tossed.push({ age: -i * 0.06, dur: 0.75, from: 560 + Math.random() * 160, off: (Math.random() - 0.5) * 70 });
     }
   };
 
@@ -342,7 +549,15 @@
     const state = town.game.state;
     const m = town.modal;
     let body = "";
-    if (m.id === "casino") {
+    if (m.id === "fountain") {
+      const f = state.fountain;
+      const amounts = [1, 10, 100, 1000, 10000];
+      body = `<p class="modal-sub">Toss coins into the fountain. It keeps count of every coin that goes in, though nobody knows what it's saving up for.</p>
+        <div class="fountain-total"><span>Coins in the fountain</span><b>${FP.formatCoins(f.coins)}</b>
+          <span>${f.tosses === 1 ? "from 1 toss" : "from " + FP.formatCoins(f.tosses) + " tosses"}</span></div>
+        <p class="modal-sub">You have ${coin}<b>${FP.formatCoins(state.coins)}</b> coins.</p>
+        <div class="moves toss">${amounts.map(n => `<button class="btn btn-gold" data-toss="${n}" ${state.coins < n ? "disabled" : ""}>Toss ${FP.formatCoins(n)}</button>`).join("")}</div>`;
+    } else if (m.id === "casino") {
       if (m.step === "pick") {
         body = `<p class="modal-sub">Pick a crop from your basket to bet. Win and its value goes up. Lose and its value is cut in half, but you keep it. Each crop can only be bet once.</p>
           ${pickList(state, "You have no crops to bet. Harvest something first, or check that your crops haven't all been bet already.")}`;
@@ -373,7 +588,7 @@
       }
     }
     town.modalEl.innerHTML = `<div class="modal-box modal-${m.id}">
-        <div class="modal-head"><h2>${m.id === "casino" ? "Casino" : "Weather Station"}</h2><button class="modal-close" data-close>Close</button></div>
+        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
         ${body}
       </div>`;
     if (m.id === "weather") drawWeatherman(m.step === "spin");
@@ -388,6 +603,17 @@
     if (!el || el.disabled) return;
     if (el.hasAttribute("data-close")) return town.closeModal();
     if (el.dataset.back) { m.step = el.dataset.back; m.result = null; return renderModal(); }
+    if (el.dataset.toss) {
+      const n = Number(el.dataset.toss);
+      if (state.coins < n) return;
+      state.coins -= n;
+      state.fountain.coins += n;
+      state.fountain.tosses++;
+      town.tossCoins(n);
+      FP.sfx("coin");
+      town.game.action("townChanged", {});
+      return renderModal();
+    }
     if (el.dataset.pick !== undefined) {
       const item = m.choices[Number(el.dataset.pick)];
       if (!item || !state.harvest.includes(item)) return renderModal();

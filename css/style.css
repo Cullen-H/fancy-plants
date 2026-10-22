@@ -495,6 +495,8 @@ html, body {
 .mod::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mod, #999); }
 .mod.rainbow { background: linear-gradient(90deg, #ffd6d6, #fff2c2, #d6f5d6, #d6ecff, #ead6ff); border-color: #8a6cff; }
 .mod.rainbow::before { background: conic-gradient(#ff5a5a, #ffe14d, #6ee36e, #4bb8ff, #e07cff, #ff5a5a); }
+.mod.mono { background: linear-gradient(90deg, #ffffff, #d9d9d9, #ffffff); border-color: #222; }
+.mod.mono::before { background: linear-gradient(90deg, #111 50%, #fff 50%); box-shadow: 0 0 0 1px #111; }
 .mod.unknown { color: var(--ink-soft); background: #eee3d0; border: 1.5px dashed #b89f7c; }
 .mod.unknown::before { display: none; }
 

@@ -1,7 +1,7 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 9;
+  const SAVE_VERSION = 10;
 
   const newStats = () => ({ planted: 0, harvested: 0, earned: 0, runEarned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
@@ -76,9 +76,16 @@
   // Version 6 added farm levels and rebirth. Version 7 added farm floors.
   // Version 8 added special seeds, tiles, the Green House, and Picket Fences.
   // Version 9 added the Request Board.
+  // Version 10 turned the Second Floor and Third Floor skills into one Farm Floors skill.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
+    const skills = data.rebirth && data.rebirth.skills;
+    if (skills && (skills.floor2 || skills.floor3)) {
+      skills.floors = (skills.floor2 ? 1 : 0) + (skills.floor3 ? 1 : 0);
+      delete skills.floor2;
+      delete skills.floor3;
+    }
     data.version = SAVE_VERSION;
     return data;
   }
@@ -113,6 +120,7 @@
     if (Number.isFinite(p.pausedAt)) plant.pausedAt = p.pausedAt;
     if (p.needsFeed === true) plant.needsFeed = true;
     if (p.fenced === true) plant.fenced = true;
+    if (plant.mods.includes(p.sealed)) plant.sealed = p.sealed;
     return plant;
   }
 

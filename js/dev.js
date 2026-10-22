@@ -37,7 +37,7 @@
         g.state.fences += 3;
         g.state.workerBag.push({ workerId: "greenhouse", level: 1 });
       }],
-      ["Unlock all floors and sizes", g => { Object.assign(g.state.rebirth.skills, { wide: 3, floor2: 1, floor3: 1 }); FP.ensureFloors(g.state); }],
+      ["Unlock all floors and sizes", g => { Object.assign(g.state.rebirth.skills, { wide: 3, floors: 2 }); FP.ensureFloors(g.state); }],
       ["Open black hole", g => g.action("openVoid", {})],
       ["Replay Town cutscene", g => { if (!g.state.rebirth.count) g.state.rebirth.count = 1; g.action("replayTownIntro", {}); }],
       ["Open Town", g => { if (!g.state.rebirth.townSeen) { g.state.rebirth.count = Math.max(1, g.state.rebirth.count); g.state.rebirth.townSeen = true; } g.action("openTown", {}); }],

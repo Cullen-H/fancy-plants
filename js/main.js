@@ -132,6 +132,14 @@
       ui.renderHotbar();
     },
 
+    buyFloor() {
+      const err = FP.buyFloor(state);
+      if (err) return fail(err);
+      toast("You built floor " + state.floors.length + ". Use the arrows under the Town sign to go up to it.");
+      FP.sfx("goal");
+      coinsChanged();
+    },
+
     upgrade(d) {
       const u = FP.UPGRADE_BY_ID[d.id];
       const err = FP.buyUpgrade(state, d.id);
@@ -399,11 +407,18 @@
 
     if (tool && tool.type === "fence") {
       if (isDrag) return;
+      // Clicking a plant that already has a fence picks the fence back up.
+      if (plant && plant.fenced) {
+        FP.removeFence(state, plant);
+        FP.sfx("dig");
+        toast("You picked up the fence around the " + FP.SEED_BY_ID[plant.seedId].name + ".");
+        ui.renderHotbar();
+        return;
+      }
       const err = FP.placeFence(state, x, y);
       if (err) return fail(err);
       FP.sfx("dig");
-      toast("The Picker will leave this " + FP.SEED_BY_ID[plant.seedId].name + " alone now.");
-      if (!state.fences) ui.tool = null;
+      toast("The Picker and Harvest All will leave this " + FP.SEED_BY_ID[plant.seedId].name + " alone now.");
       ui.renderHotbar();
       return;
     }
@@ -486,7 +501,12 @@
       if (!isDrag) fail(res.error);
       return;
     }
-    if (res.fed) {
+    if (res.sealed) {
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, "#c0392b", 14, 0.8);
+      FP.fx.text(r.x + r.s / 2, r.y + r.s * 0.3, "Sealed", "#8e2a1f");
+      FP.sfx("goal");
+      toast("The " + FP.MODS[res.sealed].name + " modifier is sealed onto the " + FP.SEED_BY_ID[plant.seedId].name + ". It stays after every harvest now.");
+    } else if (res.fed) {
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.5, "#c9a26b", 14, 0.8);
       toast("The " + FP.SEED_BY_ID[plant.seedId].name + " has what it needs and started growing.");
     } else if (def.grow) {
@@ -527,6 +547,14 @@
     } else {
       FP.fx.text(cx, cy - 10, FP.MODS[modId].name, FP.shade(FP.modColor(modId, t), 0.3));
     }
+  }
+
+  // A modifier flying off a plant in a hurricane.
+  function blownAway(x, y, modId) {
+    const r = FP.plotRect(FP.layout(state), x, y);
+    const cx = r.x + r.s / 2, cy = r.y + r.s * 0.4;
+    FP.fx.burst(cx, cy, FP.modColor(modId, Date.now() / 1000), 8, 0.6);
+    FP.fx.text(cx, cy - 10, "Lost " + FP.MODS[modId].name, "#5b6470");
   }
 
   // The shovel asks for a second click so a misclick can't destroy a plant.
@@ -681,8 +709,12 @@
   function updateWeather(now) {
     if (now >= state.weather.endsAt) {
       const ending = FP.currentWeather(state);
-      if (ending.mod) {
-        const mod = FP.MODS[ending.mod].name;
+      if (ending.strip) {
+        toast(weatherChanged === 0
+          ? "The hurricane passed without taking anything."
+          : "The hurricane blew modifiers off " + (weatherChanged === 1 ? "1 plant." : weatherChanged + " plants."));
+      } else if (ending.mod) {
+        const mod = [ending.mod, ...(ending.also || [])].map(id => FP.MODS[id].name).join(" or ");
         toast(weatherChanged === 0
           ? "The " + ending.noun + " ended without changing any plants."
           : "The " + ending.noun + " left " + (weatherChanged === 1 ? "1 plant " : weatherChanged + " plants ") + mod + ".");
@@ -701,6 +733,9 @@
         FP.weatherTick(state, (x, y, plant, modId, result) => {
           weatherChanged++;
           if (showing) celebrateMod(x, y, plant, modId, result);
+        }, (x, y, plant, modId) => {
+          weatherChanged++;
+          if (showing) blownAway(x, y, modId);
         });
         FP.nightTick(state, now, showing ? celebrateMod : () => {});
       });
@@ -817,7 +852,7 @@
     });
   }
 
-  // Golden and Prismatic plants get announced once, when they first show up.
+  // Lucky plants get announced once, when they first show up.
   function announceLucky() {
     state.plots.forEach((row, y) => row.forEach((plant, x) => {
       if (!plant || !plant.luckyNew) return;
@@ -825,7 +860,7 @@
       delete plant.luckyNew;
       const seed = FP.SEED_BY_ID[plant.seedId];
       const r = FP.plotRect(FP.layout(state), x, y);
-      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, id === "golden" ? "#ffd23f" : "#e07cff", 18, 1);
+      FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.4, { golden: "#ffd23f", diamond: "#b9f2ff", prismatic: "#e07cff", monochrome: "#ffffff" }[id], 18, 1);
       toast("Lucky! Your " + seed.name + " is growing " + FP.MODS[id].name + ".", true);
       ui.refreshTab("guide");
     }));

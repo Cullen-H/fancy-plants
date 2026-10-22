@@ -567,6 +567,23 @@
       fillStroke(ctx, "#ffe14d");
       shine(ctx, 36, 40, 10);
     },
+    seal(ctx) {
+      // A blob of red wax with a leaf stamped into it.
+      ctx.beginPath();
+      for (let i = 0; i <= 16; i++) {
+        const a = i / 16 * TAU, rr = 32 + (i % 2 ? 3 : -1);
+        ctx.lineTo(48 + Math.cos(a) * rr, 50 + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      fillStroke(ctx, "#c0392b");
+      ctx.beginPath();
+      ctx.arc(48, 50, 20, 0, TAU);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#8e2a1f";
+      ctx.stroke();
+      leaf(ctx, 48, 60, 24, 10, -1.2, "#e05a48");
+      shine(ctx, 36, 36, 9);
+    },
     spray(ctx) {
       FP.roundRect(ctx, 30, 38, 36, 50, 10);
       fillStroke(ctx, "#f2c230");

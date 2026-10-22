@@ -130,6 +130,62 @@
     }
   }
 
+  // Streaks of wind and a few leaves blowing across. strength speeds everything up for a hurricane.
+  function wind(ctx, t, alpha, strength) {
+    ctx.lineCap = "round";
+    ctx.strokeStyle = `rgba(255,255,255,${0.45 * alpha})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 14 * strength; i++) {
+      const d = drops[i];
+      const x = ((d.x * (W + 400) + t * 420 * strength * d.speed) % (W + 400)) - 200;
+      const y = d.y * H;
+      const len = 60 + d.size * 80;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + len * 0.3, y - 8, x + len * 0.6, y + 8, x + len, y);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 10 * strength; i++) {
+      const d = drops[40 + i];
+      const x = ((d.x * (W + 200) + t * 300 * strength * d.speed) % (W + 200)) - 100;
+      const y = d.y * H + Math.sin(t * 3 + i) * 30;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(t * 4 + i);
+      ctx.fillStyle = FP.rgba(i % 3 ? "#6fbf4a" : "#d9a441", 0.85 * alpha);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 3.5, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Soft bands of fog drifting slowly sideways.
+  function fog(ctx, t, alpha) {
+    for (let i = 0; i < 10; i++) {
+      const y = 40 + i * 70 + Math.sin(t * 0.3 + i) * 12;
+      const x = ((i * 377 + t * (12 + i * 3)) % (W + 600)) - 300;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 340);
+      g.addColorStop(0, `rgba(240,242,246,${0.55 * alpha})`);
+      g.addColorStop(1, "rgba(235,238,242,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(x - 340, y - 340, 680, 680);
+    }
+  }
+
+  // Thick snow driven sideways by the wind.
+  function blizzard(ctx, t, alpha) {
+    ctx.fillStyle = `rgba(255,255,255,${0.9 * alpha})`;
+    for (let i = 0; i < 160; i++) {
+      const d = drops[i];
+      const y = ((d.y * H + t * 160 * d.speed) % (H + 20)) - 10;
+      const x = ((d.x * (W + 300) + t * 260 * d.speed + Math.sin(t * 2 + i) * 10) % (W + 300)) - 150;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.4 + d.size * 2.4, 0, TAU);
+      ctx.fill();
+    }
+  }
+
   // Lightning flashes at random moments during a thunderstorm.
   const storm = { next: 0, flashAt: -10, boltX: 0 };
 
@@ -162,7 +218,8 @@
   }
 
   // Butterflies hide in these.
-  FP.ROUGH_WEATHER = { rain: true, snow: true, hail: true, thunder: true, moonlight: true, bloodmoon: true, meteors: true };
+  FP.ROUGH_WEATHER = { rain: true, snow: true, hail: true, thunder: true, moonlight: true, bloodmoon: true, meteors: true,
+    windy: true, fog: true, blizzard: true, hurricane: true };
 
   // alpha fades the whole effect in and out when the weather changes.
   FP.drawWeather = function (ctx, id, t, alpha) {
@@ -204,6 +261,25 @@
       case "rainbow":
         tint(ctx, `rgba(255,220,240,${0.06 * alpha})`);
         rainbowArc(ctx, t, alpha);
+        break;
+      case "windy":
+        tint(ctx, `rgba(200,235,220,${0.06 * alpha})`);
+        wind(ctx, t, alpha, 1);
+        break;
+      case "fog":
+        tint(ctx, `rgba(220,224,230,${0.22 * alpha})`);
+        fog(ctx, t, alpha);
+        break;
+      case "blizzard":
+        tint(ctx, `rgba(225,238,255,${0.3 * alpha})`);
+        blizzard(ctx, t, alpha);
+        hail(ctx, t, alpha * 0.7);
+        break;
+      case "hurricane":
+        tint(ctx, `rgba(30,40,55,${0.34 * alpha})`);
+        rain(ctx, t, 160, 1.1, alpha);
+        wind(ctx, t, alpha, 2);
+        lightning(ctx, t, alpha * 0.7);
         break;
     }
   };
@@ -300,6 +376,44 @@
       g.beginPath(); g.arc(48, 48, 28, 0, TAU); outlined(g, "#d7263d");
       g.fillStyle = "#a01a2c";
       [[38, 40, 6], [58, 54, 5], [44, 60, 4]].forEach(([x, y, r]) => { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); });
+    },
+    windy(g) {
+      g.strokeStyle = "#5fae8c"; g.lineWidth = 6; g.lineCap = "round";
+      [[20, 34, 52], [12, 52, 64], [24, 70, 44]].forEach(([x, y, len]) => {
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + len, y);
+        g.arc(x + len, y - 9, 9, Math.PI / 2, -Math.PI * 0.9, true);
+        g.stroke();
+      });
+    },
+    fog(g) {
+      cloud(g, 48, 36, 32, "#e4e8ee");
+      g.strokeStyle = "#9aa3ae"; g.lineWidth = 6; g.lineCap = "round";
+      [[18, 62, 60], [28, 76, 50]].forEach(([x, y, len]) => { g.beginPath(); g.moveTo(x, y); g.lineTo(x + len, y); g.stroke(); });
+    },
+    blizzard(g) {
+      cloud(g, 48, 34, 34, "#cfd8e3");
+      g.strokeStyle = "#5aa9ff"; g.lineWidth = 3; g.lineCap = "round";
+      [[28, 66], [50, 76], [70, 64]].forEach(([x, y]) => {
+        for (let i = 0; i < 3; i++) {
+          const a = i / 3 * Math.PI;
+          g.beginPath();
+          g.moveTo(x + Math.cos(a) * 8, y + Math.sin(a) * 8);
+          g.lineTo(x - Math.cos(a) * 8, y - Math.sin(a) * 8);
+          g.stroke();
+        }
+      });
+    },
+    hurricane(g) {
+      g.strokeStyle = "#5b6b80"; g.lineWidth = 7; g.lineCap = "round";
+      g.beginPath();
+      for (let i = 0; i <= 60; i++) {
+        const a = i / 60 * TAU * 2.2, rr = 4 + i * 0.55;
+        g.lineTo(48 + Math.cos(a) * rr, 48 + Math.sin(a) * rr);
+      }
+      g.stroke();
+      g.beginPath(); g.arc(48, 48, 6, 0, TAU); outlined(g, "#dfe6ee", 2);
     },
     meteors(g) {
       g.strokeStyle = "#c9a2ff"; g.lineWidth = 7; g.lineCap = "round";

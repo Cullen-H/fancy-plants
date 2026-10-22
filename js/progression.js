@@ -26,27 +26,28 @@
 
   // What each level unlocks. The game checks these numbers; the text is for the menus.
   FP.RARITY_LEVEL = [1, 3, 7, 12, 16];
-  FP.TOOL_LEVEL = { can: 2, fertilizer: 5, trowel: 5, jar: 10, spray: 14 };
+  FP.TOOL_LEVEL = { can: 2, fertilizer: 5, trowel: 5, jar: 10, spray: 14, seal: 16 };
   FP.WORKER_LEVEL = { waterer: 5, picker: 7, cultivator: 10, beekeeper: 14, shadow: 18 };
   FP.EXPAND_LEVEL = [2, 6, 11, 15, 17, 19, 20]; // level needed for each expansion, in order
   FP.WEATHER_LEVEL = 3;
   FP.RARE_WEATHER_LEVEL = 9;
-  FP.RARE_WEATHERS = ["rainbow", "bloodmoon", "meteors"];
+  FP.RARE_WEATHERS = ["rainbow", "blizzard", "bloodmoon", "meteors"];
+  FP.HURRICANE_LEVEL = 6;
   FP.REBIRTH_LEVEL = 12;
 
   FP.UNLOCKS = [
     { level: 2,  text: "the Watering Can and your first farm expansion" },
     { level: 3,  text: "Rare seeds and the weather" },
     { level: 5,  text: "Fertilizer, the Trowel, and the Waterer's Shed" },
-    { level: 6,  text: "a second farm expansion" },
+    { level: 6,  text: "a second farm expansion and the first hurricanes" },
     { level: 7,  text: "Epic seeds and the Picker's Hut" },
-    { level: 9,  text: "rainbows, blood moons, and meteor showers" },
+    { level: 9,  text: "rainbows, blizzards, blood moons, and meteor showers" },
     { level: 10, text: "Storm in a Jar and the Cultivation Circle" },
     { level: 11, text: "a third farm expansion" },
     { level: 12, text: "Legendary seeds and Rebirth" },
     { level: 14, text: "Golden Spray and the Bee Hive" },
     { level: 15, text: "the last farm expansion" },
-    { level: 16, text: "Mythic seeds" },
+    { level: 16, text: "Mythic seeds and the Wax Seal" },
     { level: 18, text: "the Shadow Manor" },
     { level: 20, text: "a golden frame for your farm" },
   ];
@@ -58,6 +59,7 @@
   FP.weatherUnlocked = function (state, id) {
     const level = FP.level(state);
     if (level < FP.WEATHER_LEVEL) return false;
+    if (id === "hurricane") return level >= FP.HURRICANE_LEVEL;
     return !FP.RARE_WEATHERS.includes(id) || level >= FP.RARE_WEATHER_LEVEL;
   };
 
@@ -80,7 +82,7 @@
     { id: "haggler",   branch: 1, tier: 1, name: "Haggler",       max: 5, cost: 1, desc: "Crops sell for 10% more for each level." },
     { id: "nestegg",   branch: 1, tier: 2, name: "Nest Egg",      max: 3, cost: 2, desc: "Every new run starts with extra coins: 2,000 at level 1, 10,000 at level 2, and 50,000 at level 3." },
     { id: "bulk",      branch: 1, tier: 2, name: "Bulk Buyer",    max: 3, cost: 2, desc: "Every shop stocks one more of each item for each level." },
-    { id: "lucky",     branch: 2, tier: 1, name: "Lucky Soil",    max: 4, cost: 2, desc: "Golden and Prismatic plants are 50% more likely for each level." },
+    { id: "lucky",     branch: 2, tier: 1, name: "Lucky Soil",    max: 4, cost: 2, desc: "Golden, Diamond, Prismatic, and Monochrome plants are 50% more likely for each level." },
     { id: "storm",     branch: 2, tier: 2, name: "Storm Chaser",  max: 4, cost: 1, desc: "Weather changes plants 20% more often for each level." },
     { id: "owl",       branch: 2, tier: 2, name: "Night Owl",     max: 2, cost: 2, desc: "Plants become Moonlit at night twice as often for each level." },
     { id: "hustle",    branch: 3, tier: 1, name: "Busy Buildings", max: 4, cost: 2, desc: "Buildings do their jobs 10% faster for each level." },
@@ -90,10 +92,8 @@
   FP.SKILLS.push(
     { id: "wide",   branch: 4, tier: 1, name: "Wide Fields",  max: 3, cost: 3,
       desc: "Lets your farm grow bigger. Level 1 allows 9 by 6, level 2 allows 9 by 7, and level 3 allows 10 by 7. You still expand it with coins in the Upgrades tab." },
-    { id: "floor2", branch: 4, tier: 2, name: "Second Floor", max: 1, cost: 6,
-      desc: "Adds a second floor to your farm, a whole new layer of plots. Use the arrows beside the farm to switch floors." },
-    { id: "floor3", branch: 4, tier: 2, name: "Third Floor",  max: 1, cost: 12, needs: "floor2",
-      desc: "Adds a third floor on top of the second one." },
+    { id: "floors", branch: 4, tier: 2, name: "Farm Floors", max: 2, cost: 6,
+      desc: "Lets you build another floor on your farm for each level, so up to 3 floors in all. Each floor is a whole new layer of plots, and you build it with coins in the Upgrades tab." },
   );
   FP.SKILL_BY_ID = {};
   FP.SKILLS.forEach(s => { FP.SKILL_BY_ID[s.id] = s; });
@@ -120,7 +120,6 @@
     if (err) return err;
     state.rebirth.gmo -= FP.skillCost(state, id);
     state.rebirth.skills[id] = FP.skillLevel(state, id) + 1;
-    FP.ensureFloors(state); // a new floor shows up right away
     return null;
   };
 
@@ -158,7 +157,6 @@
   // Skills that change how a run starts.
   function applyRunBonuses(state, now) {
     state.coins += NEST_EGG[FP.skillLevel(state, "nestegg")];
-    FP.ensureFloors(state);
     for (let i = 0; i < FP.skillLevel(state, "roots"); i++) {
       const size = FP.nextFarmSize(state);
       if (!size) break;

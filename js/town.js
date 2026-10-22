@@ -29,7 +29,7 @@
 
   // The weatherman takes the crop and sets the next weather. A better crop flattens the odds,
   // so rare weathers come up nearly as often as common ones.
-  FP.weatherOptions = state => FP.WEATHER.filter(w => w.mod && FP.weatherUnlocked(state, w.id));
+  FP.weatherOptions = state => FP.WEATHER.filter(w => w.mod && !w.strip && FP.weatherUnlocked(state, w.id));
 
   // Returns null, and keeps the crop, when the farm is too low a level for any weather.
   FP.weathermanPick = function (state, item, now) {

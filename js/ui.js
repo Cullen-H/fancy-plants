@@ -150,7 +150,8 @@
       ...FP.WORKERS.filter(w => state.workerBag.some(b => b.workerId === w.id)).map(w => ({ type: "building", id: w.id })),
       ...FP.TOOLS.filter(t => state.tools[t.id] > 0).map(t => ({ type: "tool", id: t.id })),
       ...Object.keys(FP.TILES).filter(k => state.tileKits[k] > 0).map(k => ({ type: "tile", id: k })),
-      ...(state.fences > 0 ? [{ type: "fence", id: "fence" }] : []),
+      // The fence stays in the bar while any are standing, so they can be picked back up.
+      ...(state.fences > 0 || FP.fencesPlaced(state) ? [{ type: "fence", id: "fence" }] : []),
       ...FP.ALL_SEEDS.filter(s => state.seeds[s.id] > 0).map(s => ({ type: "seed", id: s.id })),
     ];
   };
@@ -166,7 +167,7 @@
       return { name: t.kit, icon: FP.tileIconURL(item.id), count: state.tileKits[item.id], title: `${t.kit}. ${t.desc}` };
     }
     if (item.type === "fence") {
-      return { name: "Picket Fence", icon: FP.fenceIconURL(), count: state.fences, title: "Picket Fence. Click a plant to put a fence around it." };
+      return { name: "Picket Fence", icon: FP.fenceIconURL(), count: state.fences, title: "Picket Fence. Click a plant to put a fence around it, or click a fenced plant to pick the fence back up." };
     }
     if (item.type === "tool") {
       const def = FP.TOOL_BY_ID[item.id];
@@ -206,16 +207,17 @@
     return text;
   }
 
-  // A small colored label for a modifier. Prismatic gets a rainbow.
+  // A small colored label for a modifier. Prismatic gets a rainbow and Monochrome gets black and white.
   function modTag(id, hidden) {
     if (hidden) return `<span class="mod unknown">???</span>`;
     const mod = FP.MODS[id];
-    const style = mod.color === "rainbow" ? "" : `style="--mod:${mod.color}"`;
-    return `<span class="mod ${mod.color === "rainbow" ? "rainbow" : ""}" ${style}>${mod.name}</span>`;
+    const special = mod.color === "rainbow" || mod.color === "mono";
+    const style = special ? "" : `style="--mod:${mod.color}"`;
+    return `<span class="mod ${special ? mod.color : ""}" ${style}>${mod.name}</span>`;
   }
   ui.modTag = modTag;
 
-  const mult = id => "x" + FP.formatCoins(FP.MODS[id].mult);
+  const mult = id => "x" + (Number.isInteger(FP.MODS[id].mult) ? FP.formatCoins(FP.MODS[id].mult) : FP.MODS[id].mult);
 
   // Grayed out rows that show what a level unlocks.
   const lockedRow = (icon, name, note) => `<li class="row locked">
@@ -325,6 +327,25 @@
     }).join("");
   }
 
+  // Building new floors. It shows up once the player has been to the black hole.
+  function floorCard(state) {
+    const allowed = FP.floorsAllowed(state), have = state.floors.length;
+    if (allowed <= 1 && !state.rebirth.count) return "";
+    const title = `<div class="card-title">Farm Floors<span class="level">${have} of ${FP.MAX_FLOORS}</span></div>`;
+    if (have >= FP.MAX_FLOORS) {
+      return `<div class="card">${title}<p>Your farm has all ${FP.MAX_FLOORS} floors. The arrows under the Town sign switch between them.</p></div>`;
+    }
+    if (have >= allowed) {
+      return `<div class="card">${title}<p>Your farm has ${have === 1 ? "one floor" : have + " floors"}. The Farm Floors skill in the black hole lets you build ${have === 1 ? "a second one" : "a third one"}.</p>
+        <button class="btn wide" disabled>Needs the Farm Floors skill</button></div>`;
+    }
+    const cost = FP.floorCost(state);
+    return `<div class="card">${title}
+      <p>Building a ${have === 1 ? "second" : "third"} floor adds a whole new layer of plots the same size as your farm. Weather reaches every floor, and buildings keep working on floors you aren't looking at.</p>
+      <button class="btn btn-gold wide ${state.coins < cost ? "poor" : ""}" data-action="buyFloor">${coin}${FP.formatCoins(cost)}</button>
+    </div>`;
+  }
+
   function rebirthCard(state) {
     const gmo = FP.gmoForRebirth(state);
     const visit = state.rebirth.count > 0 ? `<button class="btn wide" data-action="openVoid" style="margin-top:8px">Visit the black hole</button>` : "";
@@ -405,6 +426,7 @@
           <p>Your farm is ${state.cols} by ${state.rows}, which is as big as it can get right now.${FP.skillLevel(state, "wide") < 3 ? " The Wide Fields skill in the black hole lets it grow bigger." : ""}</p>
         </div>`;
       }
+      html += floorCard(state);
       html += rebirthCard(state);
       FP.UPGRADES.forEach(u => {
         const level = FP.upgradeLevel(state, u.id);
@@ -425,19 +447,24 @@
 
     guide(state) {
       const now = FP.currentWeather(state);
-      const nowText = now.mod
-        ? `While it lasts, plants can become ${modTag(now.mod)}, which makes their harvests worth ${mult(now.mod)}.`
-        : "Plants grow normally until the weather changes.";
+      const nowMods = now.mod ? [now.mod, ...(now.also || [])] : [];
+      const nowText = now.strip
+        ? "While it lasts, the wind can blow weather modifiers off your plants. Plants with a Picket Fence are safe, and so is a sealed modifier."
+        : nowMods.length
+          ? `While it lasts, plants can become ${nowMods.map(id => modTag(id) + " " + mult(id)).join(" and ")}.`
+          : "Plants grow normally until the weather changes.";
       const whenText = w => w.times === "all" ? "Any time of day" : w.times.map(id => FP.TIME_BY_ID[id].name).join(", ");
-      const weatherRows = FP.WEATHER.filter(w => w.mod).map(w => `<li class="row slim">
+      const weatherRows = FP.WEATHER.filter(w => w.mod || w.strip).map(w => `<li class="row slim">
           <img class="icon small" src="${FP.weatherIconURL(w.id)}" alt="">
-          <div class="info"><div class="name">${w.name}</div><div class="meta">Makes plants ${modTag(w.mod)} ${mult(w.mod)}</div>
+          <div class="info"><div class="name">${w.name}</div><div class="meta">${w.strip
+            ? "Blows weather modifiers off plants. Fenced plants are safe."
+            : "Makes plants " + [w.mod, ...(w.also || [])].map(id => modTag(id) + " " + mult(id)).join(" and ")}</div>
           <div class="meta">Can start: ${whenText(w)}</div></div>
         </li>`).join("");
       const time = FP.timeOfDay(Date.now());
-      const luckyRows = ["golden", "prismatic"].map(id => `<li class="row slim">
+      const luckyRows = FP.LUCKY_MODS.slice().reverse().map(id => `<li class="row slim">
           <div class="info"><div class="name">${modTag(id)} ${mult(id)}</div>
-          <div class="meta">${id === "golden" ? "About 1 in 50 plants grows Golden." : "About 1 in 500 plants grows Prismatic."}</div></div>
+          <div class="meta">About 1 in ${FP.formatCoins(Math.round(1 / FP.MODS[id].chance))} plants grows ${FP.MODS[id].name}.</div></div>
         </li>`).join("");
       const fusionRows = FP.FUSIONS.map(([a, b, out]) => {
         const known = state.discovered[out];
@@ -452,7 +479,7 @@
           <img class="icon small" src="${FP.weatherIconURL(now.id)}" alt="">
           <div><div class="card-title">Right now: ${now.name}</div><p>${nowText}</p></div>
         </div>
-        <p class="guide-note">A modifier stays on a plant until you harvest it. Plants that regrow start each new crop without modifiers. Modifiers multiply together.</p>
+        <p class="guide-note">A modifier stays on a plant until you harvest it. Plants that regrow start each new crop without modifiers, unless one is sealed with a Wax Seal. Modifiers multiply together.</p>
         <h3 class="section">Day and night</h3>
         <div class="card now">
           <img class="icon small" src="${FP.weatherIconURL(time.night ? "moonlight" : "sunny")}" alt="">
@@ -634,11 +661,12 @@
       ui.lastWeather = weather.id;
       ui.els.weatherIcon.src = FP.weatherIconURL(weather.id);
       ui.els.weatherName.textContent = weather.name;
-      ui.els.weather.title = weather.mod ? "Plants may become " + FP.MODS[weather.mod].name + ". Click for the guide." : "Click for the guide.";
+      ui.els.weather.title = weather.strip ? "The wind may blow modifiers off plants without a fence. Click for the guide."
+        : weather.mod ? "Plants may become " + [weather.mod, ...(weather.also || [])].map(id => FP.MODS[id].name).join(" or ") + ". Click for the guide." : "Click for the guide.";
       ui.refreshTab("guide");
     }
     const left = FP.formatClock(state.weather.endsAt - now);
-    const timeText = weather.mod ? "Ends in " + left : "Changes in " + left;
+    const timeText = weather.id !== "clear" ? "Ends in " + left : "Changes in " + left;
     if (ui.els.weatherTime.textContent !== timeText) ui.els.weatherTime.textContent = timeText;
 
     const claimable = FP.claimableGoals(state).length;

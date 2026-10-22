@@ -167,7 +167,8 @@
   let farmCache = null, farmKey = "";
   const memory = {};   // per plot: the stage we last drew, so we notice when it changes
   let firstFrame = true;
-  const scratch = document.createElement("canvas"); // for tinting Golden and Prismatic plants
+  const CAN_FILTER = "filter" in document.createElement("canvas").getContext("2d");
+  const scratch = document.createElement("canvas"); // for tinting lucky plants
   const scratchCtx = scratch.getContext("2d");
   const sky = { id: "clear", alpha: 0 };             // the weather on screen, which fades between kinds
 
@@ -486,7 +487,7 @@
       }
     };
 
-    const tinted = plant.mods.includes("prismatic") ? "prismatic" : plant.mods.includes("golden") ? "golden" : null;
+    const tinted = ["monochrome", "prismatic", "diamond", "golden"].find(id => plant.mods.includes(id)) || null;
     if (!tinted) {
       ctx.save();
       ctx.translate(bx, by);
@@ -496,7 +497,7 @@
       return;
     }
 
-    // Golden and Prismatic plants are drawn on a scratch canvas first, then colored over,
+    // Lucky plants are drawn on a scratch canvas first, then colored over,
     // so only the plant itself picks up the tint.
     const size = r.s * 2.2;
     const px = Math.ceil(size * R.scale);
@@ -513,6 +514,14 @@
     g.globalCompositeOperation = "source-atop";
     if (tinted === "golden") {
       g.fillStyle = "rgba(255,205,40,0.55)";
+    } else if (tinted === "diamond") {
+      const grad = g.createLinearGradient(0, 0, size, size);
+      const shift = (t * 0.2) % 1;
+      [[0, 0.55], [0.5, 0.25], [1, 0.55]].forEach(([k, a]) => grad.addColorStop((k + shift) % 1, `rgba(190,245,255,${a})`));
+      g.fillStyle = grad;
+    } else if (tinted === "monochrome") {
+      // Browsers with canvas filters turn the plant gray below. Others get a gray coat instead.
+      g.fillStyle = CAN_FILTER ? "rgba(0,0,0,0)" : "rgba(160,160,160,0.75)";
     } else {
       const grad = g.createLinearGradient(0, 0, size, size);
       const shift = (t * 0.25) % 1;
@@ -521,7 +530,9 @@
     }
     g.fillRect(0, 0, size, size);
     g.globalCompositeOperation = "source-over";
+    if (tinted === "monochrome" && CAN_FILTER) ctx.filter = "grayscale(1) contrast(1.15)";
     ctx.drawImage(scratch, 0, 0, px, px, bx - size / 2, by - size * 0.8, size, size);
+    ctx.filter = "none";
 
     // A glint now and then
     const glint = (t * 0.7 + phase) % 1;
@@ -538,7 +549,9 @@
     const mods = plant.mods;
     if (!mods.length) return;
     const rad = Math.max(4, r.s * 0.06);
+    // The sealed modifier always gets a pip, even on a crowded plant.
     const shown = mods.slice(0, 4);
+    if (plant.sealed && !shown.includes(plant.sealed)) shown[shown.length - 1] = plant.sealed;
     shown.forEach((id, i) => {
       const x = r.x + r.s * 0.12 + i * rad * 2.3, y = r.y + r.s * 0.12;
       ctx.beginPath();
@@ -548,6 +561,14 @@
       ctx.lineWidth = 2;
       ctx.strokeStyle = "#3a2717";
       ctx.stroke();
+      // A sealed modifier gets a red wax ring.
+      if (id === plant.sealed) {
+        ctx.beginPath();
+        ctx.arc(x, y, rad + 2.5, 0, TAU);
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = "#c0392b";
+        ctx.stroke();
+      }
     });
     if (mods.length > shown.length) {
       ctx.font = FP.font(600, Math.round(rad * 2));
@@ -562,9 +583,10 @@
     }
   }
 
-  // Prismatic has no single color, so it cycles through the rainbow.
+  // Prismatic has no single color, so it cycles through the rainbow. Monochrome flips between black and white.
   function modColor(id, t, offset = 0) {
     const mod = FP.MODS[id];
+    if (mod.color === "mono") return Math.floor(t * 2 + offset) % 2 ? "#2b2b2b" : "#f4f4f4";
     if (mod.color !== "rainbow") return mod.color;
     return FP.RAINBOW[Math.floor(t * 4 + offset) % FP.RAINBOW.length];
   }
@@ -1282,6 +1304,7 @@
     let status = plant.needsFeed ? "Needs Fertilizer to start growing"
       : FP.isRipe(plant, now) ? "Ready to harvest" : "Ready in " + FP.formatTime(FP.timeLeft(plant, now));
     if (plant.fenced) status += ", fenced in";
+    if (plant.sealed) status += ", " + FP.MODS[plant.sealed].name + " sealed";
     const worth = FP.sellPrice(state, { value: Math.round(seed.value * FP.modMultiplier(plant.mods)) });
     const worthText = "Sells for " + FP.formatCoins(worth);
 
@@ -1326,7 +1349,7 @@
       ly += 19;
       let lx = x + 13;
       l.forEach((part, i) => {
-        ctx.fillStyle = FP.shade(modColor(part.id, t, i).replace("rainbow", "#ffffff"), 0.2);
+        ctx.fillStyle = FP.MODS[part.id].color === "mono" ? "#f4f4f4" : FP.shade(modColor(part.id, t, i), 0.2);
         ctx.fillText(part.word, lx, ly);
         lx += part.w;
       });
@@ -1360,6 +1383,7 @@
       return !!mod && !plant.mods.includes(mod);
     }
     if (tool.toolId === "spray") return !plant.mods.includes("golden");
+    if (tool.toolId === "seal") return !FP.nextSeal(plant).error;
     return false;
   }
 

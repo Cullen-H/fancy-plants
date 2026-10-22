@@ -62,8 +62,8 @@
     state.stats.harvested++;
     state.stats.byRarity[seed.rarity]++;
     if (seed.regrow > 0) {
-      // The modifiers leave with the harvest, so each new crop starts plain.
-      plant.mods = [];
+      // The modifiers leave with the harvest, so each new crop starts plain except for a sealed one.
+      plant.mods = plant.sealed ? [plant.sealed] : [];
       plant.plantedAt = now;
       plant.growMs = seed.regrow * 1000 * FP.growthFactor(state);
       plant.harvests++;
@@ -73,10 +73,11 @@
     return { item, gone: true };
   };
 
+  // Ripe plants for Harvest All. Plants with a Picket Fence are left for you to pick by hand.
   FP.ripeCells = function (state, now) {
     const cells = [];
     state.plots.forEach((row, y) => row.forEach((plant, x) => {
-      if (plant && FP.isRipe(plant, now)) cells.push({ x, y });
+      if (plant && !plant.fenced && FP.isRipe(plant, now)) cells.push({ x, y });
     }));
     return cells;
   };
@@ -103,7 +104,6 @@
     });
     state.coins += coins;
     state.stats.earned += coins;
-    state.stats.runEarned += coins;
     state.stats.runEarned += coins;
     return { count, coins };
   };
@@ -137,6 +137,7 @@
     });
     state.coins += coins;
     state.stats.earned += coins;
+    state.stats.runEarned += coins;
     return { count, coins };
   };
 
@@ -162,13 +163,25 @@
     }
   };
 
-  FP.floorsUnlocked = state => 1 + FP.skillLevel(state, "floor2") + FP.skillLevel(state, "floor3");
+  // The Farm Floors skill decides how many floors can be built. Building them costs coins.
+  FP.floorsAllowed = state => Math.min(FP.MAX_FLOORS, 1 + FP.skillLevel(state, "floors"));
+  FP.floorCost = state => FP.FLOOR_PRICES[state.floors.length - 1];
 
-  // Adds empty floors the player has unlocked but doesn't have yet.
+  const emptyFloor = state => ({ plots: FP.makeGrid(state.cols, state.rows), buildings: [], tiles: FP.makeGrid(state.cols, state.rows) });
+
+  FP.buyFloor = function (state) {
+    if (state.floors.length >= FP.MAX_FLOORS) return "Your farm already has every floor.";
+    if (state.floors.length >= FP.floorsAllowed(state)) return "The Farm Floors skill in the black hole lets you build another floor.";
+    const cost = FP.floorCost(state);
+    if (state.coins < cost) return "You need " + FP.formatCoins(cost - state.coins) + " more coins for that.";
+    state.coins -= cost;
+    state.floors.push(emptyFloor(state));
+    return null;
+  };
+
+  // Adds every floor the skill allows for free. Only the test panel uses this.
   FP.ensureFloors = function (state) {
-    while (state.floors.length < Math.min(FP.MAX_FLOORS, FP.floorsUnlocked(state))) {
-      state.floors.push({ plots: FP.makeGrid(state.cols, state.rows), buildings: [], tiles: FP.makeGrid(state.cols, state.rows) });
-    }
+    while (state.floors.length < FP.floorsAllowed(state)) state.floors.push(emptyFloor(state));
   };
 
   // Ripe plants on one floor, for the badges on the floor arrows.
@@ -308,6 +321,7 @@
         const mods = plant.mods;
         if (mods.includes(a) && mods.includes(b) && !mods.includes(out)) {
           plant.mods = mods.filter(id => id !== a && id !== b);
+          if (plant.sealed === a || plant.sealed === b) plant.sealed = out; // the seal moves to what they became
           plant.mods.push(out);
           made.push(out);
           changed = true;
@@ -329,10 +343,10 @@
     return { fused, newFinds };
   };
 
-  // Each new growing cycle has a small chance to turn out Golden or Prismatic.
+  // Each new growing cycle has a small chance to turn out Golden, Diamond, Prismatic, or Monochrome.
   // The plant remembers which one so the game can celebrate it once.
   FP.rollLucky = function (state, plant) {
-    for (const id of ["prismatic", "golden"]) {
+    for (const id of FP.LUCKY_MODS) {
       if (!plant.mods.includes(id) && Math.random() < FP.MODS[id].chance * (1 + 0.5 * FP.skillLevel(state, "lucky"))) {
         FP.addMod(state, plant, id);
         plant.luckyNew = id;
@@ -367,7 +381,7 @@
     let next;
     if (wasClear && forecast) next = FP.WEATHER_BY_ID[forecast];
     else next = wasClear ? pickWeather(state, now) : FP.WEATHER_BY_ID.clear;
-    const [lo, hi] = next.mod ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
+    const [lo, hi] = next.id !== "clear" ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
     state.weather = { id: next.id, endsAt: now + FP.randInt(lo, hi) * 1000 };
     if (forecast && !(wasClear && forecast)) state.weather.forecast = forecast; // still waiting its turn
     return next;
@@ -383,16 +397,35 @@
     }));
   };
 
-  // Gives some plants the current weather's modifier.
-  // onChange(x, y, plant, modId, result) runs for each plant that changed.
-  FP.weatherTick = function (state, onChange) {
+  // Modifiers a hurricane can blow away: weather ones that aren't sealed.
+  FP.loseableMods = plant => plant.mods.filter(id => FP.MODS[id].kind === "weather" && id !== plant.sealed);
+
+  // Gives some plants the current weather's modifiers, or blows some off during a hurricane.
+  // onChange(x, y, plant, modId, result) runs for each plant that gained one, and
+  // onStrip(x, y, plant, modId) for each plant that lost one.
+  FP.weatherTick = function (state, onChange, onStrip) {
     const weather = FP.currentWeather(state);
+    if (weather.strip) {
+      state.plots.forEach((row, y) => row.forEach((plant, x) => {
+        if (!plant || plant.fenced || Math.random() >= FP.WEATHER_CHANCE) return;
+        const loseable = FP.loseableMods(plant);
+        if (!loseable.length) return;
+        const modId = loseable[Math.floor(Math.random() * loseable.length)];
+        plant.mods = plant.mods.filter(id => id !== modId);
+        if (onStrip) onStrip(x, y, plant, modId);
+      }));
+      return;
+    }
     if (!weather.mod) return;
     const chance = FP.WEATHER_CHANCE * (1 + 0.25 * FP.upgradeLevel(state, "vane")) * (1 + 0.2 * FP.skillLevel(state, "storm"));
+    const mods = [weather.mod, ...(weather.also || [])];
     state.plots.forEach((row, y) => row.forEach((plant, x) => {
-      if (!plant || Math.random() >= chance) return;
-      const result = FP.addMod(state, plant, weather.mod);
-      if (result) onChange(x, y, plant, weather.mod, result);
+      if (!plant) return;
+      for (const modId of mods) {
+        if (Math.random() >= chance) continue;
+        const result = FP.addMod(state, plant, modId);
+        if (result) onChange(x, y, plant, modId, result);
+      }
     }));
   };
 
@@ -439,6 +472,14 @@
       return { ok: true };
     }
 
+    if (id === "seal") {
+      const next = FP.nextSeal(plant);
+      if (next.error) return next;
+      plant.sealed = next.modId;
+      spendTool(state, id);
+      return { ok: true, sealed: next.modId };
+    }
+
     let modId = null;
     if (id === "jar") {
       modId = FP.currentWeather(state).mod;
@@ -450,6 +491,18 @@
     const result = FP.addMod(state, plant, modId);
     spendTool(state, id);
     return { ok: true, modId, result };
+  };
+
+  // Which modifier a Wax Seal would seal on this plant. The first seal takes the most valuable
+  // modifier, and each seal after that moves on to the next one down, starting over at the top.
+  FP.nextSeal = function (plant) {
+    const seed = FP.SEED_BY_ID[plant.seedId];
+    if (!seed.regrow) return { error: "The " + seed.name + " doesn't regrow, so a seal would be lost when you harvest it." };
+    if (!plant.mods.length) return { error: "The " + seed.name + " has no modifiers to seal yet." };
+    const order = plant.mods.slice().sort((a, b) => FP.MODS[b].mult - FP.MODS[a].mult);
+    if (!plant.sealed || !order.includes(plant.sealed)) return { modId: order[0] };
+    if (order.length === 1) return { error: "The " + seed.name + "'s only modifier is already sealed." };
+    return { modId: order[(order.indexOf(plant.sealed) + 1) % order.length] };
   };
 
   FP.movePlant = function (state, from, to) {

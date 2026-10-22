@@ -139,7 +139,10 @@
     return null;
   };
 
-  // A fence goes around a plant so the Picker leaves it alone.
+  // True when a Picket Fence is standing anywhere on the farm.
+  FP.fencesPlaced = state => state.floors.some(f => f.plots.some(row => row.some(p => p && p.fenced)));
+
+  // A fence goes around a plant so the Picker and Harvest All leave it alone.
   FP.placeFence = function (state, x, y) {
     if (!state.fences) return "You're out of Picket Fences.";
     const occ = FP.occupantAt(state, x, y);

@@ -19,6 +19,14 @@
       needs: { size: 2 }, special: true },
     { id: "orchid",  name: "Frost Orchid", plural: "Frost Orchids", rarity: 3, price: 15000, value: 4200,  grow: 180, regrow: 120, shape: "flower", color: "#a8e0ff",
       needs: { heat: -2, humid: 1 }, special: true },
+    { id: "rice",    name: "Goddess Rice", plural: "Goddess Rice",  rarity: 3, price: 9000,  value: 1400,  grow: 150, regrow: 100, shape: "rice",   color: "#f2d16b",
+      needs: { tile: "water", heat: 1 }, rowBonus: 0.15, special: true, rebirth: 3 },
+    { id: "swirlfruit", name: "Swirlfruit", plural: "Swirlfruits",  rarity: 3, price: 20000, value: 6500,  grow: 220, regrow: 160, shape: "tree",   color: "#9b59f0", fruit: "swirl",
+      needs: { heat: 2, humid: 1 }, noMods: ["wet", "soaked"], luckBoost: 3, special: true, rebirth: 3 },
+    { id: "worldtree", name: "World Tree Sapling", plural: "World Tree Saplings", rarity: 4, price: 300000, value: 150000, grow: 900, regrow: 600, shape: "worldtree", color: "#6fd17a",
+      needs: { size: 3 }, special: true, rebirth: 3 },
+    { id: "bloom",   name: "Philosopher's Bloom", plural: "Philosopher's Blooms", rarity: 4, price: 120000, value: 1500, grow: 300, regrow: 200, shape: "bloom", color: "#c0392b",
+      transmute: true, special: true, rebirth: 3 },
     { id: "ember",   name: "Ember Pepper", plural: "Ember Peppers", rarity: 3, price: 15000, value: 4600,  grow: 170, regrow: 120, shape: "pepper", color: "#ff5a1f",
       needs: { heat: 2, humid: -1 }, special: true },
   ];
@@ -34,6 +42,10 @@
     giantpumpkin: { text: "Bring me 3 Pumpkins.",                     seed: "pumpkin", mods: null,                 count: 3 },
     orchid:       { text: "Bring me 3 crops that are Chilled or Frozen.", seed: null,  mods: ["chilled", "frozen"], count: 3 },
     ember:        { text: "Bring me 5 crops that are Heated.",        seed: null,      mods: ["heated"],           count: 5 },
+    rice:         { text: "Bring me 5 Lotuses.",                      seed: "lotus",   mods: null,                 count: 5 },
+    swirlfruit:   { text: "Bring me 5 Ember Peppers.",                seed: "ember",   mods: null,                 count: 5 },
+    worldtree:    { text: "Bring me 3 Giant Pumpkins.",               seed: "giantpumpkin", mods: null,            count: 3 },
+    bloom:        { text: "Bring me 3 crops that are Golden.",        seed: null,      mods: ["golden"],           count: 3 },
   };
 
   FP.TILES = {
@@ -72,8 +84,8 @@
   // The plant covering a plot, and the plot its top left corner is on.
   // Big plants are stored once, at their top left corner.
   FP.occupantAt = function (state, x, y) {
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = 0; dx <= 1; dx++) {
+    for (let dy = 0; dy <= 2; dy++) {
+      for (let dx = 0; dx <= 2; dx++) {
         const ax = x - dx, ay = y - dy;
         if (ax < 0 || ay < 0) continue;
         const plant = state.plots[ay] && state.plots[ay][ax];
@@ -107,6 +119,7 @@
 
   FP.newPlant = function (state, seed, now) {
     const plant = { seedId: seed.id, plantedAt: now, growMs: seed.grow * 1000 * FP.growthFactor(state), harvests: 0, mods: [] };
+    if (seed.variants) plant.variant = FP.randInt(0, FP.BERRY_COLORS.length - 1);
     if (seed.needs && seed.needs.feed) {
       plant.needsFeed = true;
       plant.pausedAt = now;
@@ -157,9 +170,13 @@
     return state.harvest.filter(item => (!q.seed || item.seedId === q.seed) && (!q.mods || item.mods.some(m => q.mods.includes(m))));
   };
 
+  // Seeds that need a few rebirths before the Seed Shop owner will talk about them.
+  FP.rebirthReady = (state, seed) => !seed.rebirth || state.rebirth.count >= seed.rebirth;
+
   FP.turnInQuest = function (state, id) {
     const q = FP.QUESTS[id];
     if (FP.specialUnlocked(state, id)) return "You already finished that quest.";
+    if (!FP.rebirthReady(state, FP.SEED_BY_ID[id])) return "That seed isn't ready yet.";
     const items = FP.questItems(state, id).sort((a, b) => a.value - b.value).slice(0, q.count); // the cheapest ones go first
     if (items.length < q.count) return "You need " + (q.count - items.length) + " more for that quest.";
     state.harvest = state.harvest.filter(item => !items.includes(item));

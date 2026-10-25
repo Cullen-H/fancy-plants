@@ -209,6 +209,11 @@
         spots.slice(0, 3).forEach(([x, y]) => ball(ctx, x * R, y * R, s * (ripe ? 0.07 : 0.045), ripe ? seed.color : "#a5d65a"));
       } else if (seed.fruit === "strawberry") {
         spots.slice(0, 3).forEach(([x, y]) => strawberry(ctx, x * R, y * R + s * 0.02, s * (ripe ? 0.05 : 0.035), ripe ? seed.color : "#cfe8a0", ripe));
+      } else if (seed.fruit === "pocket") {
+        spots.forEach(([x, y], i) => {
+          const color = seed.variantColor ? seed.color : FP.BERRY_COLORS[i % FP.BERRY_COLORS.length].color;
+          ball(ctx, x * R, y * R, s * (ripe ? 0.045 : 0.03), ripe ? color : "#c4dd9a");
+        });
       } else if (seed.fruit === "berry") {
         spots.forEach(([x, y]) => berryCluster(ctx, x * R, y * R, s * (ripe ? 0.03 : 0.022), ripe ? seed.color : "#c4dd9a"));
       } else if (seed.fruit === "tuber") {
@@ -307,6 +312,18 @@
         const fx = x * R, fy = cy + y * R;
         if (seed.fruit === "star") {
           star(ctx, fx, fy, s * 0.058, seed.color);
+        } else if (seed.fruit === "swirl") {
+          const r = s * 0.052;
+          ball(ctx, fx, fy, r, seed.color);
+          ctx.beginPath();
+          for (let k = 0; k <= 24; k++) {
+            const a = k / 24 * TAU * 1.6, rr = r * 0.8 * (k / 24);
+            ctx.lineTo(fx + Math.cos(a) * rr, fy + Math.sin(a) * rr);
+          }
+          ctx.lineWidth = lw * 0.9;
+          ctx.strokeStyle = FP.shade(seed.color, -0.45);
+          ctx.stroke();
+          stem(ctx, fx, fy - r, fx + r * 0.3, fy - r * 1.5, s * 0.012, "#5b8c2a");
         } else {
           ball(ctx, fx, fy, s * 0.048, seed.color);
           leaf(ctx, fx + s * 0.01, fy - s * 0.04, s * 0.035, s * 0.015, 0.6, LEAF);
@@ -437,6 +454,170 @@
         ctx.quadraticCurveTo(x + side * s * 0.02, y + s * 0.06, x, y);
         fillStroke(ctx, color);
       });
+    },
+  });
+
+  // ---------- Plants that unlock after Rebirth 3 ----------
+
+  Object.assign(SHAPES, {
+    // Cat Tower Bean: a vine that twists up a pole, with glowing bean pods when ripe.
+    beanstalk(ctx, s, stage, seed, t) {
+      const H = s * (0.22 + 0.16 * stage);
+      stem(ctx, 0, 0, 0, -H, s * 0.018, "#a0703f");
+      ctx.beginPath();
+      for (let k = 0; k <= 30; k++) {
+        const y = -H * k / 30;
+        ctx.lineTo(Math.sin(k / 30 * TAU * 2) * s * 0.05, y);
+      }
+      ctx.lineWidth = s * 0.03 + lw * 2;
+      ctx.strokeStyle = FP.shade(STEM, -0.42);
+      ctx.stroke();
+      ctx.lineWidth = s * 0.03;
+      ctx.strokeStyle = STEM;
+      ctx.stroke();
+      for (let i = 0; i < 2 + stage; i++) {
+        const k = (i + 0.5) / (2 + stage), y = -H * k;
+        const side = i % 2 ? 1 : -1;
+        leaf(ctx, Math.sin(k * TAU * 2) * s * 0.05, y, s * 0.11, s * 0.06, side * 1.3, i % 2 ? LEAF : LEAF_DARK);
+      }
+      if (stage < 2) return;
+      const ripe = stage === 3;
+      [[-0.09, 0.55], [0.09, 0.35], [-0.06, 0.8]].forEach(([x, k]) => {
+        const px = x * s, py = -H * k;
+        if (ripe) {
+          const g = ctx.createRadialGradient(px, py, 0, px, py, s * 0.08);
+          g.addColorStop(0, `rgba(230,255,150,${0.45 + 0.15 * Math.sin(t * 3 + k * 5)})`);
+          g.addColorStop(1, "rgba(230,255,150,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(px - s * 0.08, py - s * 0.08, s * 0.16, s * 0.16);
+        }
+        ctx.beginPath();
+        ctx.ellipse(px, py, s * (ripe ? 0.028 : 0.018), s * (ripe ? 0.045 : 0.03), x > 0 ? 0.5 : -0.5, 0, TAU);
+        fillStroke(ctx, ripe ? seed.color : "#a5d65a");
+        if (ripe) shine(ctx, px, py, s * 0.03);
+      });
+    },
+
+    // Goddess Rice: clumps of thin blades that grow golden heads which droop when ripe.
+    rice(ctx, s, stage, seed) {
+      const H = s * (0.12 + 0.09 * stage);
+      const clumps = [-0.12, 0, 0.12];
+      clumps.forEach((cx, ci) => {
+        for (let b = -2; b <= 2; b++) {
+          const x0 = cx * s + b * s * 0.008;
+          const tip = x0 + b * s * 0.025;
+          stem(ctx, x0, 0, tip, -H * (0.85 + 0.15 * ((b + ci) % 2)), s * 0.008, b % 2 ? LEAF : LEAF_DARK);
+        }
+      });
+      if (stage < 2) return;
+      const ripe = stage === 3;
+      clumps.forEach(cx => {
+        const x0 = cx * s, top = -H;
+        const droop = ripe ? s * 0.06 : s * 0.02;
+        ctx.beginPath();
+        ctx.moveTo(x0, top + s * 0.02);
+        ctx.quadraticCurveTo(x0 + droop, top - s * 0.04, x0 + droop * 1.4, top + s * 0.04);
+        ctx.lineWidth = s * 0.008;
+        ctx.strokeStyle = ripe ? "#c9a227" : "#9ccc5a";
+        ctx.stroke();
+        for (let g = 0; g < 5; g++) {
+          const k = (g + 1) / 6;
+          const gx = x0 + droop * 1.4 * k, gy = top + s * 0.02 - s * 0.05 * Math.sin(k * Math.PI) + s * 0.02 * k;
+          ctx.beginPath();
+          ctx.ellipse(gx, gy, s * 0.012, s * 0.02, 0.6, 0, TAU);
+          fillStroke(ctx, ripe ? seed.color : "#b5d66a");
+        }
+      });
+    },
+
+    // World Tree Sapling: a broad tree with roots and a glowing crown. It covers 3 by 3 plots.
+    worldtree(ctx, s, stage, seed, t) {
+      const H = s * (0.1 + 0.07 * stage);
+      const tw = s * (0.025 + 0.012 * stage);
+      // Roots spreading over the ground
+      [-1, -0.5, 0.5, 1].forEach(side => {
+        ctx.beginPath();
+        ctx.moveTo(side * tw * 0.4, -s * 0.02);
+        ctx.quadraticCurveTo(side * tw * 1.5, -s * 0.01, side * tw * (2.2 + Math.abs(side)), s * 0.02);
+        ctx.lineWidth = tw * 0.45;
+        ctx.strokeStyle = BARK;
+        ctx.stroke();
+      });
+      ctx.beginPath();
+      ctx.moveTo(-tw, 0);
+      ctx.quadraticCurveTo(-tw * 0.5, -H * 0.5, -tw * 0.7, -H);
+      ctx.lineTo(tw * 0.7, -H);
+      ctx.quadraticCurveTo(tw * 0.5, -H * 0.5, tw, 0);
+      ctx.closePath();
+      fillStroke(ctx, BARK);
+      if (stage === 1) {
+        leaf(ctx, 0, -H, s * 0.12, s * 0.05, -0.7, LEAF);
+        leaf(ctx, 0, -H, s * 0.12, s * 0.05, 0.7, LEAF_DARK);
+        return;
+      }
+      const R = s * (stage === 2 ? 0.15 : 0.19);
+      const cy = -H - R * 0.35;
+      if (stage === 3) {
+        const g = ctx.createRadialGradient(0, cy, 0, 0, cy, R * 1.7);
+        g.addColorStop(0, FP.rgba("#d6ffb0", 0.35 + 0.1 * Math.sin(t * 1.5)));
+        g.addColorStop(1, FP.rgba("#d6ffb0", 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, cy, R * 1.7, 0, TAU);
+        ctx.fill();
+      }
+      [[-0.75, 0.25, 0.55, LEAF_DARK], [0.75, 0.25, 0.55, LEAF_DARK], [-0.4, -0.35, 0.6, LEAF], [0.4, -0.35, 0.6, LEAF], [0, -0.6, 0.6, LEAF], [0, 0.1, 0.7, LEAF]]
+        .forEach(([x, y, r, c]) => ball(ctx, x * R, cy + y * R, r * R, c, false));
+      if (stage < 3) return;
+      // Little lights drifting in the crown
+      for (let i = 0; i < 7; i++) {
+        const a = i / 7 * TAU + t * 0.3;
+        const lx = Math.cos(a) * R * 0.7, ly = cy + Math.sin(a * 1.3) * R * 0.45;
+        ctx.beginPath();
+        ctx.arc(lx, ly, s * 0.012, 0, TAU);
+        ctx.fillStyle = `rgba(255,250,200,${0.6 + 0.4 * Math.sin(t * 3 + i)})`;
+        ctx.fill();
+      }
+    },
+
+    // Philosopher's Bloom: a red flower over a gold alchemy circle.
+    bloom(ctx, s, stage, seed, t) {
+      const H = s * (0.14 + 0.1 * stage);
+      stem(ctx, 0, 0, 0, -H, s * 0.025);
+      leaf(ctx, 0, -H * 0.3, s * 0.13, s * 0.055, -1.1, LEAF_DARK);
+      leaf(ctx, 0, -H * 0.5, s * 0.12, s * 0.05, 1.1, LEAF);
+      if (stage === 1) return;
+      const cy = -H;
+      if (stage === 2) {
+        ctx.beginPath();
+        ctx.ellipse(0, cy - s * 0.04, s * 0.035, s * 0.055, 0, 0, TAU);
+        fillStroke(ctx, FP.shade(seed.color, 0.3));
+        return;
+      }
+      // The circle turns slowly behind the flower.
+      ctx.save();
+      ctx.translate(0, cy);
+      ctx.rotate(t * 0.4);
+      ctx.strokeStyle = `rgba(240,190,50,${0.75 + 0.2 * Math.sin(t * 2)})`;
+      ctx.lineWidth = lw;
+      const R = s * 0.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, TAU);
+      ctx.moveTo(R * 0.8, 0);
+      ctx.arc(0, 0, R * 0.8, 0, TAU);
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + i * TAU / 3;
+        ctx.lineTo(Math.cos(a) * R * 0.8, Math.sin(a) * R * 0.8);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+      for (let i = 0; i < 5; i++) {
+        leaf(ctx, 0, cy, s * 0.12, s * 0.07, i / 5 * TAU, i % 2 ? seed.color : FP.shade(seed.color, 0.2));
+      }
+      ball(ctx, 0, cy, s * 0.04, "#ffd23f");
     },
   });
 

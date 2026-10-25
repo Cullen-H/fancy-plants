@@ -76,9 +76,11 @@ Phase 16 is done. Every plot has a heat (Cold, Cool, Normal, Warm, or Hot) and a
 
 Phase 17 is done. The Casino games are animated now. In Blackjack, cards slide out of a deck on the table and flip face up, and the dealer turns the hidden card over before drawing. In Slots, each reel scrolls a long strip of crops and stops on the result, left to right, with the clicks slowing down as the reels stop. The coin in Coin Flip spins up into the air and lands with a bounce. In Rock Paper Scissors, both hands shake three times before they show what was thrown. None of the odds or payouts changed.
 
-## Plants after Rebirth 3 (concepts)
+Phase 18 is done. The six plants below unlock after a farm's third rebirth. Pocket Berries and Cat Tower Beans show up in the regular seed shop, and the other four are in the Town Seed Shop behind their own quests. Pocket Berries come in five colors, and selling more than one color together adds 10% of the berries' value for each extra color. Harvesting a Cat Tower Bean ripens up to three growing plants around it. Goddess Rice needs a water tile kept Warm, which takes a Heater or two Campfires, and each rice plant beside it in the row makes it grow 15% faster. Swirlfruit needs a plot that is Hot and Humid, never becomes Wet or Soaked, and is three times as likely to grow lucky. The World Tree Sapling covers 3 by 3 plots. The Philosopher's Bloom turns its crop Golden at its first harvest, every crop after that starts Golden, and each later harvest adds Diamond, which fuses into Bejeweled.
 
-These are ideas to edit together before any of them get built. They use the six names from the renamed references table, and each one leans on what it was originally based on. All of them unlock once a farm has rebirthed three times.
+## Plants after Rebirth 3
+
+These started as concepts and were built in Phase 18. They use the six names from the renamed references table, and each one leans on what it was originally based on. All of them unlock once a farm has rebirthed three times.
 
 **Pocket Berry** comes from the berries in the pocket monster games. It would be a Rare seed in the regular shop that grows fast, costs little, and regrows. Each harvest could come out in one of several berry colors, and selling a mix of colors together could pay a small bonus, like blending berries into a treat.
 

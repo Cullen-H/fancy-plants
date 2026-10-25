@@ -980,6 +980,9 @@
   FP.needsText = function (seed) {
     const n = seed.needs || {};
     if (n.tile) return "Has to be planted on " + FP.TILES[n.tile].name.toLowerCase() + ".";
+    if (seed.transmute) return "Each harvest turns the crop Golden, or adds Diamond if it's already Golden. Every crop after the first starts Golden.";
+    if (n.tile && FP.needsClimate(seed)) return "Has to be planted on " + FP.TILES[n.tile].name.toLowerCase() + " that is " + FP.climateWanted(seed) + ". Rice beside rice grows faster.";
+    if (FP.needsClimate(seed) && seed.noMods) return "Only grows on a plot that is " + FP.climateWanted(seed) + ". It can never become Wet, but it's three times as likely to grow lucky.";
     if (n.feed) return "Waits as a sprout until you give it Fertilizer.";
     if (n.size) return "Takes up " + n.size + " by " + n.size + " plots.";
     if (FP.needsClimate(seed)) return "Only grows on a plot that is " + FP.climateWanted(seed) + ". Attachments from the Farming Tools store change a plot's heat and humidity.";
@@ -988,6 +991,13 @@
 
   function seedShopBody(state) {
     const seeds = FP.SPECIAL_SEEDS.map(seed => {
+      if (!FP.rebirthReady(state, seed)) {
+        return `<div class="shop-row locked-seed" style="--rarity:${FP.RARITIES[seed.rarity].color}">
+          <img src="${FP.seedIconURL(seed)}" alt="">
+          <div class="shop-info"><b>${seed.name}</b><span>"Come back after your third rebirth and I'll tell you about this one."</span></div>
+          <button class="btn" disabled>Locked</button>
+        </div>`;
+      }
       const unlocked = FP.specialUnlocked(state, seed.id);
       const q = FP.QUESTS[seed.id];
       const have = Math.min(q.count, FP.questItems(state, seed.id).length);

@@ -37,6 +37,7 @@
         g.state.fences += 3;
         FP.ATTACHMENT_IDS.forEach(id => { g.state.attachmentBag[id] = (g.state.attachmentBag[id] || 0) + 2; });
       }],
+      ["Set rebirths to 3", g => { g.state.rebirth.count = Math.max(3, g.state.rebirth.count); g.state.rebirth.townSeen = true; FP.refreshShop(g.state, Date.now()); }],
       ["Unlock all floors and sizes", g => { Object.assign(g.state.rebirth.skills, { wide: 3, floors: 2 }); FP.ensureFloors(g.state); }],
       ["Open black hole", g => g.action("openVoid", {})],
       ["Replay Town cutscene", g => { if (!g.state.rebirth.count) g.state.rebirth.count = 1; g.action("replayTownIntro", {}); }],

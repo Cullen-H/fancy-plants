@@ -46,18 +46,54 @@
   FP.harvestPlot = function (state, x, y, now) {
     const plant = state.plots[y][x];
     if (!plant || !FP.isRipe(plant, now)) return null;
+    const seed = FP.SEED_BY_ID[plant.seedId];
     const result = FP.harvestPlant(state, plant, now);
     if (result.gone) {
       FP.removeFence(state, plant); // a fence around a plant that's gone goes back in the bar
       state.plots[y][x] = null;
     }
+    if (seed.ripenNear) {
+      const cells = FP.ripenNear(state, x, y, seed.ripenNear, now);
+      if (cells.length) FP.harvestBoosts.set(result.item, cells);
+    }
     return result.item;
   };
+
+  // Plots a Cat Tower Bean ripened when it was harvested, kept by the harvested item for the effects.
+  FP.harvestBoosts = new WeakMap();
+
+  // Instantly ripens up to count growing plants around a plot. Returns the plots they're on.
+  FP.ripenNear = function (state, x, y, count, now) {
+    const found = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dy) || x + dx < 0 || y + dy < 0 || x + dx >= state.cols || y + dy >= state.rows) continue;
+        const occ = FP.occupantAt(state, x + dx, y + dy);
+        if (!occ || occ.plant.pausedAt || FP.isRipe(occ.plant, now) || found.some(f => f.plant === occ.plant)) continue;
+        found.push(occ);
+      }
+    }
+    for (let i = found.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [found[i], found[j]] = [found[j], found[i]];
+    }
+    return found.slice(0, count).map(occ => {
+      occ.plant.plantedAt = now - occ.plant.growMs;
+      return { x: occ.x, y: occ.y };
+    });
+  };
+
+  // The Philosopher's Bloom turns its crop Golden at harvest, or adds Diamond when it's already Golden.
+  function transmute(state, plant) {
+    FP.addMod(state, plant, plant.mods.includes("golden") ? "diamond" : "golden");
+  }
 
   // Harvests a ripe plant wherever it is. gone is true when it doesn't regrow and should be removed.
   FP.harvestPlant = function (state, plant, now) {
     const seed = FP.SEED_BY_ID[plant.seedId];
+    if (seed.transmute) transmute(state, plant);
     const item = { seedId: seed.id, value: Math.round(seed.value * FP.modMultiplier(plant.mods)), mods: plant.mods.slice() };
+    if (plant.variant !== undefined) item.variant = plant.variant;
     FP.addXp(state, FP.HARVEST_XP[seed.rarity]);
     state.harvest.push(item);
     state.stats.harvested++;
@@ -68,6 +104,8 @@
       plant.plantedAt = now;
       plant.growMs = seed.regrow * 1000 * FP.growthFactor(state);
       plant.harvests++;
+      if (seed.transmute) FP.addMod(state, plant, "golden"); // every crop after the first starts Golden
+      if (seed.variants) plant.variant = FP.randInt(0, FP.BERRY_COLORS.length - 1);
       FP.rollLucky(state, plant);
       return { item, gone: false };
     }
@@ -92,21 +130,33 @@
 
   // ---------- Selling ----------
 
+  // Pocket Berries sold together in more than one color pay a bit extra.
+  FP.blendBonus = function (state, items) {
+    const berries = items.filter(item => item.variant !== undefined);
+    const colors = new Set(berries.map(item => item.variant)).size;
+    if (colors < 2) return 0;
+    return Math.round(berries.reduce((sum, item) => sum + FP.sellPrice(state, item), 0) * FP.BLEND_BONUS * (colors - 1));
+  };
+
   // Sells every harvested item, or only one kind when seedId is given.
   FP.sellHarvest = function (state, seedId) {
     let count = 0, coins = 0;
+    const sold = [];
     state.harvest = state.harvest.filter(item => {
       if (seedId && item.seedId !== seedId) return true;
       count++;
+      sold.push(item);
       const price = FP.sellPrice(state, item);
       coins += price;
       state.stats.best = Math.max(state.stats.best, price);
       return false;
     });
+    const blend = FP.blendBonus(state, sold);
+    coins += blend;
     state.coins += coins;
     state.stats.earned += coins;
     state.stats.runEarned += coins;
-    return { count, coins };
+    return { count, coins, blend };
   };
 
   FP.sellPrice = (state, item) => Math.round(item.value * (1 + 0.05 * FP.upgradeLevel(state, "stall")) * (1 + 0.1 * FP.skillLevel(state, "haggler")));
@@ -118,8 +168,9 @@
     const groups = {};
     state.harvest.forEach(item => {
       const key = groupKey(item);
-      const g = groups[key] || (groups[key] = { key, seed: FP.SEED_BY_ID[item.seedId], mods: item.mods, count: 0, total: 0 });
+      const g = groups[key] || (groups[key] = { key, seed: FP.SEED_BY_ID[item.seedId], mods: item.mods, count: 0, total: 0, colors: new Set() });
       g.count++;
+      if (item.variant !== undefined) g.colors.add(item.variant);
       g.total += FP.sellPrice(state, item);
     });
     return Object.values(groups).sort((a, b) => b.total - a.total);
@@ -128,18 +179,22 @@
   // Sells one group from harvestGroups.
   FP.sellGroup = function (state, key) {
     let count = 0, coins = 0;
+    const sold = [];
     state.harvest = state.harvest.filter(item => {
       if (groupKey(item) !== key) return true;
       count++;
+      sold.push(item);
       const price = FP.sellPrice(state, item);
       coins += price;
       state.stats.best = Math.max(state.stats.best, price);
       return false;
     });
+    const blend = FP.blendBonus(state, sold);
+    coins += blend;
     state.coins += coins;
     state.stats.earned += coins;
     state.stats.runEarned += coins;
-    return { count, coins };
+    return { count, coins, blend };
   };
 
   // ---------- Floors ----------
@@ -337,6 +392,8 @@
   // { fused, newFinds } where fused lists fusion results and newFinds lists first time discoveries.
   FP.addMod = function (state, plant, modId) {
     if (plant.mods.includes(modId)) return null;
+    const blocked = FP.SEED_BY_ID[plant.seedId].noMods;
+    if (blocked && blocked.includes(modId)) return null;
     plant.mods.push(modId);
     state.stats.modsGained++;
     const fused = resolveFusions(plant);
@@ -349,7 +406,8 @@
   // The plant remembers which one so the game can celebrate it once.
   FP.rollLucky = function (state, plant) {
     for (const id of FP.LUCKY_MODS) {
-      if (!plant.mods.includes(id) && Math.random() < FP.MODS[id].chance * (1 + 0.5 * FP.skillLevel(state, "lucky"))) {
+      const boost = FP.SEED_BY_ID[plant.seedId].luckBoost || 1;
+      if (!plant.mods.includes(id) && Math.random() < FP.MODS[id].chance * boost * (1 + 0.5 * FP.skillLevel(state, "lucky"))) {
         FP.addMod(state, plant, id);
         plant.luckyNew = id;
         return id;

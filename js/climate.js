@@ -116,12 +116,18 @@
         if (FP.climateFits(seed, FP.tileClimate(state, x, y))) FP.resumePlant(plant, now);
         else FP.pausePlant(plant, now);
       }
+      if (plant.pausedAt) return;
       const near = FP.attachmentsOn(state, x, y);
-      if (!near.length || plant.pausedAt) return;
-      if (near.some(a => FP.ATTACHMENTS[a.id].grow) && !FP.isRipe(plant, now)) {
-        const grow = Math.max(...near.map(a => FP.ATTACHMENTS[a.id].grow || 0));
-        plant.plantedAt = Math.max(plant.plantedAt - dtMs * grow, now - plant.growMs);
+      // Sprinklers speed up the plants they touch. Goddess Rice also speeds up for each rice plant beside it in the row.
+      let grow = near.length ? Math.max(0, ...near.map(a => FP.ATTACHMENTS[a.id].grow || 0)) : 0;
+      if (seed.rowBonus) {
+        for (const nx of [x - 1, x + 1]) {
+          const other = row[nx];
+          if (other && other.seedId === seed.id) grow += seed.rowBonus;
+        }
       }
+      if (grow && !FP.isRipe(plant, now)) plant.plantedAt = Math.max(plant.plantedAt - dtMs * grow, now - plant.growMs);
+      if (!near.length) return;
       if (!rollMods) return;
       for (const a of near) {
         const modId = FP.ATTACHMENTS[a.id].mod;

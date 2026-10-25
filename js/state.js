@@ -123,6 +123,7 @@
     if (p.needsFeed === true) plant.needsFeed = true;
     if (p.fenced === true) plant.fenced = true;
     if (plant.mods.includes(p.sealed)) plant.sealed = p.sealed;
+    if (Number.isInteger(p.variant) && FP.BERRY_COLORS[p.variant]) plant.variant = p.variant;
     return plant;
   }
 
@@ -147,7 +148,11 @@
 
     s.harvest = (Array.isArray(d.harvest) ? d.harvest : [])
       .filter(item => item && FP.SEED_BY_ID[item.seedId] && Number.isFinite(item.value) && item.value >= 0)
-      .map(item => ({ seedId: item.seedId, value: item.value, mods: cleanMods(item.mods), bet: item.bet === true }));
+      .map(item => {
+        const clean = { seedId: item.seedId, value: item.value, mods: cleanMods(item.mods), bet: item.bet === true };
+        if (Number.isInteger(item.variant) && FP.BERRY_COLORS[item.variant]) clean.variant = item.variant;
+        return clean;
+      });
 
     if (d.shop && Array.isArray(d.shop.stock)) {
       s.shop.stock = d.shop.stock

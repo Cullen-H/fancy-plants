@@ -256,7 +256,10 @@
     const level = FP.level(state);
     const locked = FP.RARITIES.map((r, i) => ({ r, i, need: FP.RARITY_LEVEL[i] })).filter(x => x.need > level)
       .map(x => lockedRow(FP.seedIconURL(FP.SEEDS.find(s => s.rarity === x.i)), x.r.name + " seeds", "Level " + x.need)).join("");
-    return seedStockRows(state) + locked;
+    // After the first rebirth, the shop hints at the seeds that come later.
+    const later = state.rebirth.count >= 1 && state.rebirth.count < 3
+      ? lockedRow(FP.seedIconURL(FP.SEED_BY_ID.pocketberry), "New seeds", "After 3 rebirths") : "";
+    return seedStockRows(state) + locked + later;
   }
 
   function seedStockRows(state) {
@@ -419,6 +422,7 @@
           <div class="info">
             <div class="name">${g.count} ${g.count === 1 ? g.seed.name : g.seed.plural}</div>
             ${g.mods.length ? `<div class="mods">${g.mods.map(id => modTag(id)).join("")}</div>` : ""}
+            ${g.colors.size > 1 ? `<div class="meta">${g.colors.size} colors, so selling them together adds ${g.colors.size * 10 - 10}% as a blend bonus</div>` : ""}
             <div class="meta">Worth ${FP.formatCoins(g.total)} coins</div>
           </div>
           <button class="btn" data-action="sell" data-key="${g.key}">Sell</button>
@@ -618,7 +622,7 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.17</p>`;
+        <p class="version">Fancy Plants v0.18</p>`;
     },
 
     controls() {

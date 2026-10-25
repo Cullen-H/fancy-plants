@@ -18,13 +18,25 @@
     { id: "potato",       name: "Potato",       plural: "Potatoes",      rarity: 0, price: 60,    value: 15,    grow: 35,  regrow: 25,  shape: "bush",    color: "#c99a5b", fruit: "tuber" },
     { id: "tomato",       name: "Tomato",       plural: "Tomatoes",      rarity: 1, price: 150,   value: 40,    grow: 45,  regrow: 35,  shape: "bush",    color: "#e8412c", fruit: "round" },
     { id: "strawberry",   name: "Strawberry",   plural: "Strawberries",  rarity: 1, price: 220,   value: 55,    grow: 50,  regrow: 40,  shape: "bush",    color: "#e63950", fruit: "strawberry" },
+    { id: "pocketberry",  name: "Pocket Berry", plural: "Pocket Berries", rarity: 1, price: 300,   value: 45,    grow: 25,  regrow: 15,  shape: "bush",    color: "#e5533d", fruit: "pocket",
+      variants: true, rebirth: 3 },
     { id: "blueberry",    name: "Blueberry",    plural: "Blueberries",   rarity: 1, price: 190,   value: 32,    grow: 35,  regrow: 25,  shape: "bush",    color: "#4a5bd4", fruit: "berry" },
     { id: "pumpkin",      name: "Pumpkin",      plural: "Pumpkins",      rarity: 2, price: 900,   value: 1500,  grow: 120, regrow: 0,   shape: "pumpkin", color: "#f07f1a" },
     { id: "corn",         name: "Corn",         plural: "Corn",          rarity: 2, price: 1200,  value: 230,   grow: 90,  regrow: 60,  shape: "stalk",   color: "#f5d33b" },
+    { id: "catbean",      name: "Cat Tower Bean", plural: "Cat Tower Beans", rarity: 2, price: 3000, value: 500,  grow: 110, regrow: 80,  shape: "beanstalk", color: "#7ccf3a",
+      ripenNear: 3, rebirth: 3 },
     { id: "starfruit",    name: "Starfruit",    plural: "Starfruit",     rarity: 3, price: 4500,  value: 850,   grow: 150, regrow: 100, shape: "tree",    color: "#f9d923", fruit: "star" },
     { id: "golden_apple", name: "Golden Apple", plural: "Golden Apples", rarity: 3, price: 7000,  value: 10500, grow: 240, regrow: 0,   shape: "tree",    color: "#f2c230", fruit: "apple" },
     { id: "moonflower",   name: "Moonflower",   plural: "Moonflowers",   rarity: 4, price: 22000, value: 3800,  grow: 240, regrow: 150, shape: "flower",  color: "#b9b3f0" },
   ];
+
+  // rebirth is how many rebirths a farm needs before a seed shows up.
+  // Pocket Berries come in colors, and selling several colors together pays a blend bonus.
+  FP.BERRY_COLORS = [
+    { name: "Red", color: "#e5533d" }, { name: "Blue", color: "#4a5bd4" }, { name: "Yellow", color: "#f5c518" },
+    { name: "Pink", color: "#ff7ab8" }, { name: "Purple", color: "#9b59f0" },
+  ];
+  FP.BLEND_BONUS = 0.1; // extra share of the berries' value for each color past the first
 
   FP.SEED_BY_ID = {};
   FP.SEEDS.forEach(seed => { FP.SEED_BY_ID[seed.id] = seed; });

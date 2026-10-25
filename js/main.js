@@ -36,6 +36,8 @@
     if (ui.selected) ui.renderPopup();
   }
 
+  const blendText = res => (res.blend ? " The berry blend added " + FP.formatCoins(res.blend) + "." : "");
+
   // Sends a handful of coins from a button up to the coin counter.
   function flyCoins(el, count) {
     const from = el ? FP.renderer.centerOf(el) : { x: 1090, y: 200 };
@@ -155,7 +157,7 @@
       const res = FP.sellGroup(state, d.key);
       flyCoins(el, res.count);
       tutorial.on("sell");
-      toast("You sold " + FP.countOf(group.seed, res.count) + " for " + FP.formatCoins(res.coins) + " coins.");
+      toast("You sold " + FP.countOf(group.seed, res.count) + " for " + FP.formatCoins(res.coins) + " coins." + blendText(res));
       coinsChanged();
     },
 
@@ -164,7 +166,7 @@
       if (!res.count) return;
       flyCoins(el, res.count);
       tutorial.on("sell");
-      toast("You sold everything for " + FP.formatCoins(res.coins) + " coins.");
+      toast("You sold everything for " + FP.formatCoins(res.coins) + " coins." + blendText(res));
       coinsChanged();
     },
 
@@ -345,6 +347,16 @@
     const item = FP.harvestPlot(state, x, y, now);
     if (!item) return false;
     FP.sfx("harvest");
+    // A Cat Tower Bean ripens the plants around it.
+    const boosted = FP.harvestBoosts.get(item);
+    if (boosted) {
+      const L = FP.layout(state);
+      boosted.forEach(c => {
+        const pr = FP.plotRect(L, c.x, c.y);
+        FP.fx.burst(pr.x + pr.s / 2, pr.y + pr.s * 0.4, "#b6f05a", 12, 0.8);
+        FP.fx.text(pr.x + pr.s / 2, pr.y + pr.s * 0.3, "Ripe!", "#3f8f35");
+      });
+    }
     const seed = FP.SEED_BY_ID[item.seedId];
     const r = FP.plotRect(FP.layout(state), x, y);
     FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.5, seed.color, 10);

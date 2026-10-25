@@ -52,7 +52,7 @@
     { level: 20, text: "a golden frame for your farm" },
   ];
 
-  FP.seedUnlocked = (state, seed) => FP.level(state) >= FP.RARITY_LEVEL[seed.rarity];
+  FP.seedUnlocked = (state, seed) => FP.level(state) >= FP.RARITY_LEVEL[seed.rarity] && (!seed.rebirth || state.rebirth.count >= seed.rebirth);
   FP.toolUnlocked = (state, id) => FP.level(state) >= FP.TOOL_LEVEL[id];
   FP.workerUnlocked = (state, id) => FP.level(state) >= FP.WORKER_LEVEL[id];
 

@@ -453,8 +453,17 @@
     return mem.popAt;
   }
 
-  function drawPlantAt(ctx, plant, r, now, t, phase, popAt) {
+  // A Pocket Berry is drawn in its own color. Each color gets one copy of the seed with that color.
+  const berryLooks = {};
+  FP.plantLook = function (plant) {
     const seed = FP.SEED_BY_ID[plant.seedId];
+    if (plant.variant === undefined) return seed;
+    const key = seed.id + plant.variant;
+    return berryLooks[key] || (berryLooks[key] = Object.assign({}, seed, { color: FP.BERRY_COLORS[plant.variant].color, variantColor: true }));
+  };
+
+  function drawPlantAt(ctx, plant, r, now, t, phase, popAt) {
+    const seed = FP.plantLook(plant);
     const { stage, sub } = FP.growStage(plant, now);
     const bx = r.x + r.s / 2, by = r.y + r.s * 0.74;
 
@@ -1290,6 +1299,7 @@
     const plant = occ.plant;
     const seed = FP.SEED_BY_ID[plant.seedId];
     const rarity = FP.RARITIES[seed.rarity];
+    const title = plant.variant !== undefined ? FP.BERRY_COLORS[plant.variant].name + " " + seed.name : seed.name;
     const climateWait = !plant.needsFeed && plant.pausedAt && FP.needsClimate(seed);
     let status = plant.needsFeed ? "Needs Fertilizer to start growing"
       : climateWait ? "Waiting for a plot that is " + FP.climateWanted(seed)
@@ -1316,7 +1326,7 @@
     let w = Math.max(ctx.measureText(status).width, ctx.measureText(worthText).width);
     modLines.forEach(l => { w = Math.max(w, l.reduce((sum, p) => sum + p.w, 0)); });
     ctx.font = fontBold();
-    w = Math.max(w, ctx.measureText(seed.name).width) + 26;
+    w = Math.max(w, ctx.measureText(title).width) + 26;
     const h = 64 + modLines.length * 19;
     const x = FP.clamp(view.mouse.x + 18, 4, FARM.x + FARM.w - w);
     const y = FP.clamp(view.mouse.y + 18, 70, H - 96 - h);
@@ -1331,7 +1341,7 @@
     ctx.textAlign = "left";
     ctx.font = fontBold();
     ctx.fillStyle = FP.shade(rarity.color, 0.35);
-    ctx.fillText(seed.name, x + 13, y + 22);
+    ctx.fillText(title, x + 13, y + 22);
     ctx.font = fontText();
     ctx.fillStyle = "#f3e6d0";
     ctx.fillText(status, x + 13, y + 41);

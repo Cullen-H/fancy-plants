@@ -47,6 +47,7 @@
     moonlit:    { name: "Moonlit",        color: "#b0a3e6", mult: 2,      kind: "weather" },
     icy:        { name: "Icy",            color: "#7fe3ff", mult: 3,      kind: "weather" },
     breeze:     { name: "Breeze",         color: "#a8e6cf", mult: 1.5,    kind: "weather" },
+    soaked:     { name: "Soaked",         color: "#2f6fdb", mult: 2.5,    kind: "weather" },
     foggy:      { name: "Foggy",          color: "#b8bec7", mult: 1.5,    kind: "weather" },
     blood:      { name: "Blood Stricken", color: "#d7263d", mult: 6,      kind: "weather" },
     lucky:      { name: "Lucky",          color: "#ff9ecf", mult: 8,      kind: "weather" },
@@ -67,6 +68,19 @@
     pollinated: { name: "Pollinated",     color: "#ffc23a", mult: 2,      kind: "worker" },
     risen:      { name: "Risen",          color: "#5b3fa0", mult: 4,      kind: "worker" },
     monarch:    { name: "Monarch",        color: "#3d1f7a", mult: 60,     kind: "fusion" },
+    mist:       { name: "Mist",           color: "#c9d6df", mult: 3,      kind: "fusion" },
+    torrential: { name: "Torrential",     color: "#1d4fa8", mult: 5,      kind: "fusion" },
+    mystical:   { name: "Mystical",       color: "#c77dff", mult: 16,     kind: "fusion" },
+    wispy:      { name: "Wispy",          color: "#dde6ef", mult: 18,     kind: "fusion" },
+    electrified:{ name: "Electrified",    color: "#7df9ff", mult: 20,     kind: "fusion" },
+    subzero:    { name: "Sub-Zero",       color: "#a6f0ff", mult: 24,     kind: "fusion" },
+    clouded:    { name: "Clouded",        color: "#9aa8b8", mult: 54,     kind: "fusion" },
+    bejeweled:  { name: "Bejeweled",      color: "#3de0b0", mult: 200,    kind: "fusion" },
+    sunkissed:  { name: "Sun-kissed",     color: "#ffb36b", mult: 375,    kind: "fusion" },
+    unique:     { name: "Unique",         color: "#7cffcb", mult: 1200,   kind: "fusion" },
+    achromatic: { name: "Achromatic",     color: "mono",    mult: 4000,   kind: "fusion" },
+    achroite:   { name: "Achroite",       color: "rainbow", mult: 800000, kind: "fusion" },
+    antimatter: { name: "Anti-Matter",    color: "#6a00ff", mult: 15000000, kind: "fusion" },
   };
 
   // When a plant has both of the first two, they turn into the third.
@@ -80,6 +94,19 @@
     ["solar", "frozen", "supernova"],
     ["celestial", "supernova", "universal"],
     ["aura", "risen", "monarch"],
+    ["diamond", "golden", "bejeweled"],
+    ["prismatic", "monochrome", "achromatic"],
+    ["bejeweled", "achromatic", "achroite"],
+    ["frozen", "icy", "subzero"],
+    ["foggy", "breeze", "mist"],
+    ["shocked", "wet", "electrified"],
+    ["lucky", "pollinated", "mystical"],
+    ["aura", "solar", "sunkissed"],
+    ["celestial", "paradox", "unique"],
+    ["paradox", "universal", "antimatter"],
+    ["soaked", "wet", "torrential"],
+    ["foggy", "gaseous", "wispy"],
+    ["mist", "wispy", "clouded"],
   ];
 
   // Lucky modifiers from rarest to most common, the order they get rolled in.
@@ -91,6 +118,7 @@
   // weight decides how often each weather is picked. A new weather starts as soon as the last one ends.
   // times lists the times of day a weather can start in. Moonlight is part of the day and night clock now.
   // also lists extra modifiers a weather can give. strip means the weather blows modifiers off plants instead.
+  // Events are short weathers. upgrade turns a modifier a plant already has into a stronger one.
   FP.WEATHER = [
     { id: "clear",     name: "Clear Skies",   mod: null,        weight: 25, times: "all", start: "The weather cleared up." },
     { id: "rain",      name: "Rain",          mod: "wet",       weight: 30, noun: "rain", times: "all", start: "It started to rain." },
@@ -101,6 +129,8 @@
     { id: "hail",      name: "Hail",          mod: "icy",       weight: 10, noun: "hail", times: ["morning", "noon", "afternoon", "dusk"], start: "Hail is coming down." },
     { id: "thunder",   name: "Thunderstorm",  mod: "shocked",   weight: 6,  noun: "thunderstorm", times: ["afternoon", "dusk", "evening"], start: "A thunderstorm rolled in." },
     { id: "hurricane", name: "Hurricane",     mod: null,        weight: 1,  noun: "hurricane", times: ["dusk"], strip: true, start: "A hurricane is tearing across the farm. Fences will keep plants safe." },
+    { id: "flashflood", name: "Flash Flood",  mod: "wet",       weight: 5,  noun: "flash flood", times: "all", event: true, upgrade: { wet: "soaked" }, start: "A flash flood is rushing over the farm." },
+    { id: "flashfreeze", name: "Flash Freeze", mod: "chilled",  weight: 5,  noun: "flash freeze", times: "all", event: true, upgrade: { chilled: "icy" }, start: "A flash freeze hit the farm." },
     { id: "blizzard",  name: "Blizzard",      mod: "icy",       weight: 3,  noun: "blizzard", times: ["evening", "midnight", "latenight", "dawn"], also: ["chilled"], start: "A blizzard is howling over the farm." },
     { id: "rainbow",   name: "Rainbow",       mod: "lucky",     weight: 5,  noun: "rainbow", times: ["dawn", "morning", "afternoon"], start: "A rainbow appeared over the farm." },
     { id: "bloodmoon", name: "Blood Moon",    mod: "blood",     weight: 4,  noun: "blood moon", times: ["midnight"], start: "The moon turned red." },
@@ -109,7 +139,11 @@
   FP.WEATHER_BY_ID = {};
   FP.WEATHER.forEach(w => { FP.WEATHER_BY_ID[w.id] = w; });
 
-  FP.WEATHER_TIMES = { clear: [60, 120], active: [100, 160], firstClear: 45 }; // seconds
+  FP.WEATHER_TIMES = { clear: [60, 120], active: [100, 160], event: [20, 30], firstClear: 45 }; // seconds
+  FP.EVENT_CHANCE = 0.3; // chance per plant per tick during an event, since events are short
+
+  // Every modifier a weather can leave on a plant.
+  FP.weatherMods = w => (w.mod ? [w.mod, ...(w.also || []), ...Object.values(w.upgrade || {})] : []);
   FP.WEATHER_TICK_MS = 5000;   // how often weather tries to change plants
   FP.WEATHER_CHANCE = 0.06;    // chance per plant per tick
 

@@ -468,13 +468,21 @@
     guide(state) {
       const now = FP.currentWeather(state);
       const nowMods = now.mod ? [now.mod, ...(now.also || [])] : [];
+      const upgradeText = w => Object.entries(w.upgrade).map(([a, b]) => `Plants that are already ${modTag(a)} become ${modTag(b)} ${mult(b)}.`).join(" ");
       const nowText = now.strip
         ? "While it lasts, the wind can blow weather modifiers off your plants. Plants with a Picket Fence are safe, and so is a sealed modifier."
+        : now.event
+          ? `This event is short. Plants can become ${modTag(now.mod)} ${mult(now.mod)}. ${upgradeText(now)}`
         : nowMods.length
           ? `While it lasts, plants can become ${nowMods.map(id => modTag(id) + " " + mult(id)).join(" and ")}.`
           : "Plants grow normally until the weather changes.";
       const whenText = w => w.times === "all" ? "Any time of day" : w.times.map(id => FP.TIME_BY_ID[id].name).join(", ");
-      const weatherRows = FP.WEATHER.filter(w => w.mod || w.strip).map(w => `<li class="row slim">
+      const eventRows = FP.WEATHER.filter(w => w.event).map(w => `<li class="row slim">
+          <img class="icon small" src="${FP.weatherIconURL(w.id)}" alt="">
+          <div class="info"><div class="name">${w.name}</div><div class="meta">Makes plants ${modTag(w.mod)} ${mult(w.mod)}. ${upgradeText(w)}</div>
+          <div class="meta">Lasts under half a minute, any time of day.</div></div>
+        </li>`).join("");
+      const weatherRows = FP.WEATHER.filter(w => (w.mod || w.strip) && !w.event).map(w => `<li class="row slim">
           <img class="icon small" src="${FP.weatherIconURL(w.id)}" alt="">
           <div class="info"><div class="name">${w.name}</div><div class="meta">${w.strip
             ? "Blows weather modifiers off plants. Fenced plants are safe."
@@ -507,6 +515,9 @@
           <p>A full day lasts 24 minutes. From Evening until Dawn, any plant can become ${modTag("moonlit")} ${mult("moonlit")}, whatever the weather is doing. Each weather can only start at certain times of day.</p></div>
         </div>
         <h3 class="section">Weather</h3><ul class="list">${weatherRows}</ul>
+        <h3 class="section">Events</h3>
+        <p class="guide-note">Events are short bursts of weather that can strengthen a modifier a plant already has.</p>
+        <ul class="list">${eventRows}</ul>
         <h3 class="section">Lucky finds</h3><ul class="list">${luckyRows}</ul>
         <h3 class="section">Building gifts</h3>
         <ul class="list">${["aura", "pollinated", "risen"].map(id => `<li class="row slim">
@@ -601,7 +612,7 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.14</p>`;
+        <p class="version">Fancy Plants v0.15</p>`;
     },
 
     controls() {
@@ -710,7 +721,7 @@
       ui.els.weatherIcon.src = FP.weatherIconURL(weather.id);
       ui.els.weatherName.textContent = weather.name;
       ui.els.weather.title = weather.strip ? "The wind may blow modifiers off plants without a fence. Click for the guide."
-        : weather.mod ? "Plants may become " + [weather.mod, ...(weather.also || [])].map(id => FP.MODS[id].name).join(" or ") + ". Click for the guide." : "Click for the guide.";
+        : weather.mod ? "Plants may become " + FP.weatherMods(weather).map(id => FP.MODS[id].name).join(" or ") + ". Click for the guide." : "Click for the guide.";
       ui.refreshTab("guide");
     }
     const left = FP.formatClock(state.weather.endsAt - now);

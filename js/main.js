@@ -763,7 +763,7 @@
           ? "The hurricane passed without taking anything."
           : "The hurricane blew modifiers off " + (weatherChanged === 1 ? "1 plant." : weatherChanged + " plants."));
       } else if (ending.mod) {
-        const mod = [ending.mod, ...(ending.also || [])].map(id => FP.MODS[id].name).join(" or ");
+        const mod = FP.weatherMods(ending).map(id => FP.MODS[id].name).join(" or ");
         toast(weatherChanged === 0
           ? "The " + ending.noun + " ended without changing any plants."
           : "The " + ending.noun + " left " + (weatherChanged === 1 ? "1 plant " : weatherChanged + " plants ") + mod + ".");

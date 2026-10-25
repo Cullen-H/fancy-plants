@@ -487,7 +487,9 @@
       }
     };
 
-    const tinted = ["monochrome", "prismatic", "diamond", "golden"].find(id => plant.mods.includes(id)) || null;
+    const TINTS = { achroite: "prismatic", achromatic: "monochrome", monochrome: "monochrome", prismatic: "prismatic", bejeweled: "bejeweled", diamond: "diamond", golden: "golden" };
+    const tintId = Object.keys(TINTS).find(id => plant.mods.includes(id));
+    const tinted = tintId ? TINTS[tintId] : null;
     if (!tinted) {
       ctx.save();
       ctx.translate(bx, by);
@@ -514,6 +516,11 @@
     g.globalCompositeOperation = "source-atop";
     if (tinted === "golden") {
       g.fillStyle = "rgba(255,205,40,0.55)";
+    } else if (tinted === "bejeweled") {
+      const grad = g.createLinearGradient(0, 0, size, size);
+      const shift = (t * 0.2) % 1;
+      [["#3de0b0", 0], ["#ffd23f", 0.33], ["#b9f2ff", 0.66]].forEach(([c, k]) => grad.addColorStop((k + shift) % 1, FP.rgba(c, 0.55)));
+      g.fillStyle = grad;
     } else if (tinted === "diamond") {
       const grad = g.createLinearGradient(0, 0, size, size);
       const shift = (t * 0.2) % 1;

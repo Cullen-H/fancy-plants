@@ -186,6 +186,42 @@
     }
   }
 
+  // Water rising along the bottom of the screen in waves.
+  function floodWater(ctx, t, alpha) {
+    const top = H - 150;
+    for (let layer = 0; layer < 2; layer++) {
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 20) {
+        const y = top + layer * 30 + Math.sin(x * 0.012 + t * (2 + layer)) * 10 + Math.sin(x * 0.03 - t * 3) * 4;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(${layer ? "40,110,200" : "90,160,230"},${(layer ? 0.32 : 0.22) * alpha})`;
+      ctx.fill();
+    }
+  }
+
+  // Frost creeping in from the corners, with glints.
+  function frost(ctx, t, alpha) {
+    for (const [cx, cy] of [[0, 0], [W, 0], [0, H], [W, H]]) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 420);
+      g.addColorStop(0, `rgba(235,250,255,${0.7 * alpha})`);
+      g.addColorStop(1, "rgba(235,250,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - 420, cy - 420, 840, 840);
+    }
+    for (let i = 0; i < 30; i++) {
+      const d = drops[i];
+      const a = Math.max(0, Math.sin(t * 3 + i * 1.7)) * alpha;
+      ctx.fillStyle = `rgba(255,255,255,${0.9 * a})`;
+      ctx.beginPath();
+      ctx.arc(d.x * W, d.y * H, 1.5 + d.size * 2, 0, TAU);
+      ctx.fill();
+    }
+  }
+
   // Lightning flashes at random moments during a thunderstorm.
   const storm = { next: 0, flashAt: -10, boltX: 0 };
 
@@ -219,7 +255,7 @@
 
   // Butterflies hide in these.
   FP.ROUGH_WEATHER = { rain: true, snow: true, hail: true, thunder: true, moonlight: true, bloodmoon: true, meteors: true,
-    windy: true, fog: true, blizzard: true, hurricane: true };
+    windy: true, fog: true, blizzard: true, hurricane: true, flashflood: true, flashfreeze: true };
 
   // alpha fades the whole effect in and out when the weather changes.
   FP.drawWeather = function (ctx, id, t, alpha) {
@@ -274,6 +310,15 @@
         tint(ctx, `rgba(225,238,255,${0.3 * alpha})`);
         blizzard(ctx, t, alpha);
         hail(ctx, t, alpha * 0.7);
+        break;
+      case "flashflood":
+        tint(ctx, `rgba(30,70,130,${0.22 * alpha})`);
+        rain(ctx, t, 160, 0.3, alpha);
+        floodWater(ctx, t, alpha);
+        break;
+      case "flashfreeze":
+        tint(ctx, `rgba(200,235,255,${0.25 * alpha})`);
+        frost(ctx, t, alpha);
         break;
       case "hurricane":
         tint(ctx, `rgba(30,40,55,${0.34 * alpha})`);
@@ -404,6 +449,23 @@
           g.stroke();
         }
       });
+    },
+    flashflood(g) {
+      cloud(g, 48, 30, 30, "#9fb3c8");
+      g.strokeStyle = "#2f6fdb"; g.lineWidth = 6; g.lineCap = "round";
+      [62, 78].forEach(y => {
+        g.beginPath();
+        for (let x = 14; x <= 82; x += 4) g.lineTo(x, y + Math.sin(x * 0.25) * 5);
+        g.stroke();
+      });
+    },
+    flashfreeze(g) {
+      g.beginPath();
+      g.moveTo(48, 10); g.lineTo(70, 48); g.lineTo(48, 86); g.lineTo(26, 48);
+      g.closePath();
+      outlined(g, "#c8f1ff", 3);
+      g.strokeStyle = "#5aa9ff"; g.lineWidth = 3; g.lineCap = "round";
+      g.beginPath(); g.moveTo(48, 22); g.lineTo(48, 74); g.moveTo(36, 48); g.lineTo(60, 48); g.stroke();
     },
     hurricane(g) {
       g.strokeStyle = "#5b6b80"; g.lineWidth = 7; g.lineCap = "round";

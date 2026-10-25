@@ -379,7 +379,7 @@
   FP.nextWeather = function (state, now) {
     const forecast = state.weather.forecast;
     const next = forecast ? FP.WEATHER_BY_ID[forecast] : pickWeather(state, now);
-    const [lo, hi] = next.id === "clear" ? FP.WEATHER_TIMES.clear : FP.WEATHER_TIMES.active;
+    const [lo, hi] = next.id === "clear" ? FP.WEATHER_TIMES.clear : next.event ? FP.WEATHER_TIMES.event : FP.WEATHER_TIMES.active;
     state.weather = { id: next.id, endsAt: now + FP.randInt(lo, hi) * 1000 };
     return next;
   };
@@ -414,10 +414,23 @@
       return;
     }
     if (!weather.mod) return;
-    const chance = FP.WEATHER_CHANCE * (1 + 0.25 * FP.upgradeLevel(state, "vane")) * (1 + 0.2 * FP.skillLevel(state, "storm"));
+    const base = weather.event ? FP.EVENT_CHANCE : FP.WEATHER_CHANCE;
+    const chance = base * (1 + 0.25 * FP.upgradeLevel(state, "vane")) * (1 + 0.2 * FP.skillLevel(state, "storm"));
     const mods = [weather.mod, ...(weather.also || [])];
     state.plots.forEach((row, y) => row.forEach((plant, x) => {
       if (!plant) return;
+      // An event turns a modifier the plant already has into a stronger one, like Wet into Soaked.
+      const from = Object.keys(weather.upgrade || {}).find(id => plant.mods.includes(id));
+      if (from) {
+        if (Math.random() >= chance) return;
+        const to = weather.upgrade[from];
+        if (plant.mods.includes(to)) return;
+        plant.mods = plant.mods.filter(id => id !== from);
+        if (plant.sealed === from) plant.sealed = to;
+        const result = FP.addMod(state, plant, to);
+        if (result) onChange(x, y, plant, to, result);
+        return;
+      }
       for (const modId of mods) {
         if (Math.random() >= chance) continue;
         const result = FP.addMod(state, plant, modId);

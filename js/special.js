@@ -1,5 +1,5 @@
 // Special plants and the things they need: special tiles, fertilizer, room for big plants,
-// and the Green House. Also the Seed Shop quests that unlock them, and the Picket Fence.
+// Also the Seed Shop quests that unlock them, and the Picket Fence.
 (function (FP) {
   // ---------- Data ----------
 
@@ -7,7 +7,7 @@
   //   tile: it can only be planted on that special tile
   //   feed: it waits as a sprout until it gets Fertilizer
   //   size: it covers size by size plots
-  //   temp and humid: it only grows in a Green House set to those
+  //   heat and humid: it only grows on a plot with that heat and humidity (see climate.js)
   FP.SPECIAL_SEEDS = [
     { id: "cactus",  name: "Cactus Pear",  plural: "Cactus Pears",  rarity: 1, price: 600,   value: 140,   grow: 60,  regrow: 45,  shape: "cactus", color: "#e2557a",
       needs: { tile: "sand" }, special: true },
@@ -18,9 +18,9 @@
     { id: "giantpumpkin", name: "Giant Pumpkin", plural: "Giant Pumpkins", rarity: 3, price: 12000, value: 30000, grow: 300, regrow: 0, shape: "pumpkin", color: "#f07f1a",
       needs: { size: 2 }, special: true },
     { id: "orchid",  name: "Frost Orchid", plural: "Frost Orchids", rarity: 3, price: 15000, value: 4200,  grow: 180, regrow: 120, shape: "flower", color: "#a8e0ff",
-      needs: { temp: 0, humid: 2 }, special: true },
+      needs: { heat: -2, humid: 1 }, special: true },
     { id: "ember",   name: "Ember Pepper", plural: "Ember Peppers", rarity: 3, price: 15000, value: 4600,  grow: 170, regrow: 120, shape: "pepper", color: "#ff5a1f",
-      needs: { temp: 3, humid: 0 }, special: true },
+      needs: { heat: 2, humid: -1 }, special: true },
   ];
   FP.SPECIAL_SEEDS.forEach(seed => { FP.SEED_BY_ID[seed.id] = seed; });
   FP.ALL_SEEDS = FP.SEEDS.concat(FP.SPECIAL_SEEDS);
@@ -42,23 +42,11 @@
   };
 
   FP.FENCE_PRICE = 600;
-  FP.GREENHOUSE_PRICE = 25000;
-  FP.TEMPS = ["Cold", "Cool", "Warm", "Hot"];
-  FP.HUMIDS = ["Dry", "Normal", "Humid"];
-
-  // The Green House is a building with no worker inside, so it never does a job.
-  FP.WORKERS.push({
-    id: "greenhouse", name: "Green House", building: "Green House", rarity: 2, price: FP.GREENHOUSE_PRICE,
-    every: [3600, 3600, 3600], range: [0, 0, 0], noShop: true, noUpgrade: true,
-    desc: "Has room for 9 plants inside, sheltered from the weather. You can set the temperature and humidity, which some plants need.",
-  });
-  FP.WORKER_BY_ID.greenhouse = FP.WORKERS[FP.WORKERS.length - 1];
-  FP.WORKER_LEVEL.greenhouse = 1;
 
   // ---------- Growing that can pause ----------
 
-  // A paused plant stops growing. Plants that need fertilizer start paused, and Green House
-  // plants pause when the temperature or humidity is wrong for them.
+  // A paused plant stops growing. Plants that need fertilizer start paused, and plants
+  // pause when their plot is the wrong heat or humidity for them.
   FP.pausePlant = function (plant, now) {
     if (!plant.pausedAt) plant.pausedAt = now;
   };
@@ -101,7 +89,6 @@
   // Big plants slide up and left to fit when clicked near the edge of the farm.
   FP.fitSeed = function (state, seed, x, y) {
     const needs = seed.needs || {};
-    if (needs.temp !== undefined) return { error: "The " + seed.name + " only grows inside a Green House." };
     const size = needs.size || 1;
     const ax = Math.min(x, state.cols - size), ay = Math.min(y, state.rows - size);
     if (ax < 0 || ay < 0) return { error: "The farm is too small for a " + seed.name + "." };
@@ -208,47 +195,4 @@
     return null;
   };
 
-  FP.buyGreenhouse = function (state) {
-    const err = pay(state, FP.GREENHOUSE_PRICE);
-    if (err) return err;
-    state.workerBag.push({ workerId: "greenhouse", level: 1 });
-    return null;
-  };
-
-  // ---------- Green House ----------
-
-  FP.newGreenhouse = () => ({ plots: new Array(9).fill(null), temp: 2, humid: 1 });
-
-  // True when a plant can grow with this Green House's settings. Ordinary plants grow in any setting.
-  FP.ghSuits = function (gh, seed) {
-    const n = seed.needs || {};
-    return (n.temp === undefined || n.temp === gh.temp) && (n.humid === undefined || n.humid === gh.humid);
-  };
-
-  FP.ghPlant = function (state, b, i, seedId, now) {
-    const seed = FP.SEED_BY_ID[seedId];
-    const needs = seed.needs || {};
-    if (!state.seeds[seedId]) return "You're out of " + seed.name + " seeds.";
-    if (b.inner.plots[i]) return "Something is already growing there.";
-    if (needs.tile || needs.size) return "The " + seed.name + " can't grow in a Green House.";
-    state.seeds[seedId]--;
-    if (state.seeds[seedId] <= 0) delete state.seeds[seedId];
-    b.inner.plots[i] = FP.newPlant(state, seed, now);
-    state.stats.planted++;
-    FP.ghCheck(b, now);
-    return null;
-  };
-
-  // Pauses or restarts each plant inside depending on the settings.
-  FP.ghCheck = function (b, now) {
-    b.inner.plots.forEach(plant => {
-      if (!plant || plant.needsFeed) return;
-      if (FP.ghSuits(b.inner, FP.SEED_BY_ID[plant.seedId])) FP.resumePlant(plant, now);
-      else FP.pausePlant(plant, now);
-    });
-  };
-
-  FP.greenhouseTick = function (state, now) {
-    state.floors.forEach(f => f.buildings.forEach(b => { if (b.inner) FP.ghCheck(b, now); }));
-  };
 })(window.FP);

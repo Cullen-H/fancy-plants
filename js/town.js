@@ -64,7 +64,7 @@
     { id: "seedshop", name: "Seed Shop",      cx: 370,  base: 292, dw: 220, dh: 220, k: 0.72, open: true },
     { id: "casino",  name: "Casino",          cx: 655,  base: 272, dw: 320, dh: 300, k: 0.62, open: true },
     { id: "weather", name: "Weather Station", cx: 935,  base: 312, dw: 280, dh: 280, k: 0.58, open: true },
-    { id: "soon2",   name: "Coming Soon",     cx: 190,  base: 490, dw: 200, dh: 230, k: 0.78, open: false },
+    { id: "tools",   name: "Farming Tools",   cx: 190,  base: 490, dw: 200, dh: 230, k: 0.78, open: true },
     { id: "requests", name: "Request Board",  cx: 1090, base: 505, dw: 210, dh: 200, k: 0.78, open: true },
     { id: "soon4",   name: "Coming Soon",     cx: 425,  base: 672, dw: 240, dh: 190, k: 0.78, open: false },
     { id: "soon5",   name: "Coming Soon",     cx: 640,  base: 695, dw: 120, dh: 230, k: 0.75, open: false },
@@ -226,6 +226,42 @@
     outlined(ctx, "#2f5f8f");
   }
 
+  // A red barn front with tools hanging by the door.
+  function drawToolStore(ctx, b, t) {
+    const w = b.dw, h = b.dh, top = -h;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(0, top + 70); ctx.lineTo(w / 2, top); ctx.lineTo(w, top + 70); ctx.lineTo(w, 0);
+    ctx.closePath();
+    outlined(ctx, "#b8432f");
+    ctx.strokeStyle = "rgba(90,25,15,0.35)";
+    ctx.lineWidth = 2;
+    for (let x = 20; x < w; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, top + 70); ctx.stroke(); }
+    FP.roundRect(ctx, 24, top + 74, w - 48, 34, 8);
+    outlined(ctx, "#fff4d6", 2);
+    ctx.font = "700 24px " + FP.displayFont();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#8e2a1f";
+    ctx.fillText("TOOLS", w / 2, top + 100);
+    // Barn doors with the white X
+    FP.roundRect(ctx, w / 2 - 44, -100, 88, 100, 4);
+    outlined(ctx, "#8e2a1f");
+    ctx.strokeStyle = "#fff4d6";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 40, -96); ctx.lineTo(w / 2 + 40, -4);
+    ctx.moveTo(w / 2 + 40, -96); ctx.lineTo(w / 2 - 40, -4);
+    ctx.moveTo(w / 2, -100); ctx.lineTo(w / 2, 0);
+    ctx.stroke();
+    // A rake and a watering can by the door
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#8a5a36"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(22, -6); ctx.lineTo(32, -96); ctx.stroke();
+    ctx.strokeStyle = "#8a96a3"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(20, -96); ctx.lineTo(46, -93); ctx.stroke();
+    FP.roundRect(ctx, w - 50, -34, 30, 30, 6);
+    outlined(ctx, "#7fb3d5", 2);
+  }
+
   function drawSeedShop(ctx, b, t) {
     const w = b.dw, h = b.dh, top = -h;
     FP.roundRect(ctx, 0, top, w, h, 8);
@@ -349,6 +385,7 @@
     else if (b.id === "weather") drawStation(ctx, b, t);
     else if (b.id === "seedshop") drawSeedShop(ctx, b, t);
     else if (b.id === "requests") drawRequestBoard(ctx, b, t);
+    else if (b.id === "tools") drawToolStore(ctx, b, t);
     else drawSoon(ctx, b);
     ctx.restore();
   }
@@ -835,6 +872,8 @@
       body = requestBody(state);
     } else if (m.id === "seedshop") {
       body = seedShopBody(state);
+    } else if (m.id === "tools") {
+      body = toolStoreBody(state);
     } else if (m.id === "fountain") {
       body = `<canvas id="wish" class="wish" width="1200" height="680"></canvas>
         <div class="moves"><button class="btn btn-gold" data-toss ${state.coins < 1 ? "disabled" : ""}>Toss a coin</button></div>
@@ -870,7 +909,7 @@
       }
     }
     town.modalEl.innerHTML = `<div class="modal-box modal-${m.id}">
-        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain", seedshop: "Seed Shop", requests: "Request Board" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
+        <div class="modal-head"><h2>${{ casino: "Casino", weather: "Weather Station", fountain: "Fountain", seedshop: "Seed Shop", requests: "Request Board", tools: "Farming Tools" }[m.id]}</h2><button class="modal-close" data-close>Close</button></div>
         ${body}
       </div>`;
     if (m.id === "weather") drawWeatherman(m.step === "spin");
@@ -943,7 +982,7 @@
     if (n.tile) return "Has to be planted on " + FP.TILES[n.tile].name.toLowerCase() + ".";
     if (n.feed) return "Waits as a sprout until you give it Fertilizer.";
     if (n.size) return "Takes up " + n.size + " by " + n.size + " plots.";
-    if (n.temp !== undefined) return "Only grows in a Green House set to " + FP.TEMPS[n.temp].toLowerCase() + " and " + FP.HUMIDS[n.humid].toLowerCase() + ".";
+    if (FP.needsClimate(seed)) return "Only grows on a plot that is " + FP.climateWanted(seed) + ". Attachments from the Farming Tools store change a plot's heat and humidity.";
     return "";
   };
 
@@ -962,19 +1001,29 @@
         ${right}
       </div>`;
     }).join("");
-    const supply = (key, icon, name, desc, price, owned) => `<div class="shop-row">
-        <img src="${icon}" alt="">
-        <div class="shop-info"><b>${name}</b><span>${desc}${owned ? " You have " + owned + "." : ""}</span></div>
-        <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-shop="${key}">${coin}${FP.formatCoins(price)}</button>
-      </div>`;
-    const gh = FP.WORKER_BY_ID.greenhouse;
     return `<p class="modal-sub">"I keep the unusual seeds back here. Do me a favor and I'll put one on the shelf for you for good."</p>
       <h3 class="section">Special seeds</h3>${seeds}
+      <p class="modal-sub">Tile kits, fences, and attachments are sold at Farming Tools now, on the left side of the plaza.</p>`;
+  }
+
+  // Farming Tools sells tile kits, the Picket Fence, and attachments.
+  function toolStoreBody(state) {
+    const supply = (key, id, icon, name, desc, price, owned) => `<div class="shop-row">
+        <img src="${icon}" alt="">
+        <div class="shop-info"><b>${name}</b><span>${desc}${owned ? " You have " + owned + "." : ""}</span></div>
+        <button class="btn btn-gold ${state.coins < price ? "poor" : ""}" data-shop="${key}" data-id="${id}">${coin}${FP.formatCoins(price)}</button>
+      </div>`;
+    const effect = a => [a.heat ? (a.heat > 0 ? "+" : "") + a.heat + " heat" : "", a.humid ? (a.humid > 0 ? "+" : "") + a.humid + " humidity" : ""].filter(Boolean).join(" and ");
+    const attachments = FP.ATTACHMENT_IDS.map(id => {
+      const a = FP.ATTACHMENTS[id];
+      return supply("att", id, FP.attachmentIconURL(id), a.name, a.desc + " It gives " + effect(a) + ".", a.price, state.attachmentBag[id]);
+    }).join("");
+    return `<p class="modal-sub">"Every plot has a heat and a humidity. Most are normal, sand is dry, and water is cool and humid. Put an attachment on a corner between plots and it changes all the plots it touches."</p>
+      <h3 class="section">Attachments</h3>${attachments}
       <h3 class="section">Supplies</h3>
-      ${supply("sand", FP.tileIconURL("sand"), FP.TILES.sand.kit, FP.TILES.sand.desc, FP.TILES.sand.price, state.tileKits.sand)}
-      ${supply("water", FP.tileIconURL("water"), FP.TILES.water.kit, FP.TILES.water.desc, FP.TILES.water.price, state.tileKits.water)}
-      ${supply("fence", FP.fenceIconURL(), "Picket Fence", "Goes around a plant so the Picker leaves it alone. On a big plant it goes around the whole thing.", FP.FENCE_PRICE, state.fences)}
-      ${supply("greenhouse", FP.buildingIconURL(gh), "Green House", gh.desc, FP.GREENHOUSE_PRICE, 0)}`;
+      ${supply("sand", "", FP.tileIconURL("sand"), FP.TILES.sand.kit, FP.TILES.sand.desc, FP.TILES.sand.price, state.tileKits.sand)}
+      ${supply("water", "", FP.tileIconURL("water"), FP.TILES.water.kit, FP.TILES.water.desc, FP.TILES.water.price, state.tileKits.water)}
+      ${supply("fence", "", FP.fenceIconURL(), "Picket Fence", "Goes around a plant so the Picker and Harvest All leave it alone. On a big plant it goes around the whole thing.", FP.FENCE_PRICE, state.fences)}`;
   }
 
   function seedShopClick(state, kind, id) {
@@ -991,9 +1040,9 @@
     } else if (kind === "fence") {
       err = FP.buyFence(state);
       msg = "You bought a Picket Fence. Click a plant to put it around.";
-    } else if (kind === "greenhouse") {
-      err = FP.buyGreenhouse(state);
-      msg = "You bought a Green House. Place it on an empty plot.";
+    } else if (kind === "att") {
+      err = FP.buyAttachment(state, id);
+      msg = "You bought " + FP.withArticle(FP.ATTACHMENTS[id].name) + ". Pick it from the bar and click a corner between plots.";
     }
     if (err) {
       FP.sfx("error");

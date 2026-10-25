@@ -148,7 +148,7 @@
     const t = ui.tool;
     if (!t || t.type !== type) return false;
     if (type === "shovel" || type === "fence") return true;
-    if (type === "tile") return t.id === id;
+    if (type === "tile" || type === "attachment") return t.id === id;
     return (type === "seed" ? t.seedId : type === "tool" ? t.toolId : t.workerId) === id;
   };
 
@@ -160,6 +160,7 @@
     else if (type === "building") ui.setTool({ type: "building", workerId: id });
     else if (type === "tile") ui.setTool({ type: "tile", id });
     else if (type === "fence") ui.setTool({ type: "fence" });
+    else if (type === "attachment") ui.setTool({ type: "attachment", id });
     else ui.setTool({ type: "tool", toolId: id });
   };
 
@@ -170,6 +171,7 @@
       ...FP.WORKERS.filter(w => state.workerBag.some(b => b.workerId === w.id)).map(w => ({ type: "building", id: w.id })),
       ...FP.TOOLS.filter(t => state.tools[t.id] > 0).map(t => ({ type: "tool", id: t.id })),
       ...Object.keys(FP.TILES).filter(k => state.tileKits[k] > 0).map(k => ({ type: "tile", id: k })),
+      ...FP.ATTACHMENT_IDS.filter(id => state.attachmentBag[id] > 0).map(id => ({ type: "attachment", id })),
       // The fence stays in the bar while any are standing, so they can be picked back up.
       ...(state.fences > 0 || FP.fencesPlaced(state) ? [{ type: "fence", id: "fence" }] : []),
       ...FP.ALL_SEEDS.filter(s => state.seeds[s.id] > 0).map(s => ({ type: "seed", id: s.id })),
@@ -185,6 +187,10 @@
     if (item.type === "tile") {
       const t = FP.TILES[item.id];
       return { name: t.kit, icon: FP.tileIconURL(item.id), count: state.tileKits[item.id], title: `${t.kit}. ${t.desc}` };
+    }
+    if (item.type === "attachment") {
+      const a = FP.ATTACHMENTS[item.id];
+      return { name: a.name, icon: FP.attachmentIconURL(item.id), count: state.attachmentBag[item.id], title: `${a.name}. ${a.desc} Click a corner between plots to place it.` };
     }
     if (item.type === "fence") {
       return { name: "Picket Fence", icon: FP.fenceIconURL(), count: state.fences, title: "Picket Fence. Click a plant to put a fence around it, or click a fenced plant to pick the fence back up." };
@@ -612,7 +618,7 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.15</p>`;
+        <p class="version">Fancy Plants v0.16</p>`;
     },
 
     controls() {
@@ -644,8 +650,26 @@
     ui.els.popup.hidden = true;
   };
 
+  // Attachments use the building popup too. Their id is "att:cx:cy".
+  ui.openAttachment = (cx, cy) => ui.openBuilding("att:" + cx + ":" + cy);
+
+  function renderAttachmentPopup(state) {
+    const [, cx, cy] = ui.selected.split(":").map(Number);
+    const a = FP.attachmentAt(state, cx, cy);
+    if (!a) return ui.closeBuilding();
+    const def = FP.ATTACHMENTS[a.id];
+    const pop = ui.els.popup;
+    pop.style.setProperty("--rarity", def.color);
+    pop.innerHTML = `<div class="popup-head"><b>${def.name}</b><span>Attachment</span></div>
+      <p>${def.desc}</p>
+      <div class="popup-actions"><button class="btn btn-plain" data-action="pickUpAttachment" data-cx="${cx}" data-cy="${cy}">Pick up</button></div>`;
+    pop.hidden = false;
+    placePopup(state, { x: Math.min(cx, state.cols - 1), y: Math.min(cy, state.rows - 1) }, pop);
+  }
+
   ui.renderPopup = function () {
     const state = ui.game.state;
+    if (String(ui.selected).startsWith("att:")) return renderAttachmentPopup(state);
     const b = state.buildings.find(other => other.uid === ui.selected);
     if (!b) return ui.closeBuilding();
     const def = FP.WORKER_BY_ID[b.workerId];
@@ -653,17 +677,6 @@
     const cost = FP.buildingUpgradeCost(b);
     const pop = ui.els.popup;
     pop.style.setProperty("--rarity", FP.RARITIES[def.rarity].color);
-    if (def.noUpgrade) {
-      const planted = b.inner.plots.filter(Boolean).length;
-      pop.innerHTML = `<div class="popup-head"><b>${def.building}</b><span>${planted} of 9 planted</span></div>
-        <p>${def.desc}</p>
-        <div class="popup-actions">
-          <button class="btn" data-action="openGreenhouse" data-uid="${b.uid}">Open</button>
-          <button class="btn btn-plain" data-action="pickUp" data-uid="${b.uid}">Pick up</button>
-        </div>`;
-      pop.hidden = false;
-      return placePopup(state, b, pop);
-    }
     pop.innerHTML = `<div class="popup-head"><b>${def.building}</b><span>Level ${b.level} of ${FP.WORKER_MAX_LEVEL}</span></div>
       <p>${def.desc}</p>
       <p class="meta">${workerStats(def, b.level)}</p>

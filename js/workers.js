@@ -74,7 +74,6 @@
     const chosen = options[0];
     state.workerBag.splice(state.workerBag.indexOf(chosen), 1);
     const b = { uid: Math.random().toString(36).slice(2, 10), workerId, x, y, level: chosen.level, lastWork: now };
-    if (workerId === "greenhouse") b.inner = chosen.inner || FP.newGreenhouse();
     state.buildings.push(b);
     return null;
   };
@@ -82,8 +81,7 @@
   // Puts a building back in the bag. It keeps its level.
   FP.pickUpBuilding = function (state, b) {
     state.buildings.splice(state.buildings.indexOf(b), 1); // in place, so the floor keeps the same list
-    // A Green House keeps whatever is planted inside when it's picked up.
-    state.workerBag.push(b.inner ? { workerId: b.workerId, level: b.level, inner: b.inner } : { workerId: b.workerId, level: b.level });
+    state.workerBag.push({ workerId: b.workerId, level: b.level });
   };
 
   FP.buildingUpgradeCost = b => Math.round(workerDef(b).price * 0.8 * b.level / 10) * 10;

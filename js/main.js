@@ -298,10 +298,13 @@
       tutorial.on("harvest");
     },
 
-    openGreenhouse(d) {
+    pickUpAttachment(d) {
+      const a = FP.pickUpAttachment(state, Number(d.cx), Number(d.cy));
       ui.closeBuilding();
-      FP.greenhouseMenu.show(d.uid);
-      FP.sfx("click");
+      if (!a) return;
+      FP.sfx("dig");
+      toast("The " + FP.ATTACHMENTS[a.id].name + " is back in your bar.");
+      ui.renderHotbar();
     },
 
     openTown() {
@@ -608,6 +611,7 @@
     else if (tool.type === "building") src = FP.buildingIconURL(FP.WORKER_BY_ID[tool.workerId]);
     else if (tool.type === "tile") src = FP.tileIconURL(tool.id);
     else if (tool.type === "fence") src = FP.fenceIconURL();
+    else if (tool.type === "attachment") src = FP.attachmentIconURL(tool.id);
     else src = FP.seedIconURL(FP.SEED_BY_ID[tool.seedId]);
     if (src !== heldSrc) {
       held.src = src;
@@ -633,6 +637,7 @@
     }
     view.mouse = toGame(e);
     if (FP.renderer.signAt(state, view.mouse.x, view.mouse.y)) return actions.openTown();
+    if (attachmentClick(view.mouse)) return;
     const cell = FP.plotAt(state, view.mouse.x, view.mouse.y);
     view.hover = cell;
     touching = e.pointerType === "touch";
@@ -640,6 +645,29 @@
     dragCell = cell;
     if (cell) useCell(cell, false);
   });
+
+  // Attachments go on corners, so they're handled before plots. Returns true when the click was used.
+  function attachmentClick(m) {
+    const tool = ui.tool;
+    if (tool && tool.type === "attachment") {
+      const c = FP.cornerAt(state, m.x, m.y, 0.6);
+      if (!c) return false;
+      const err = FP.placeAttachment(state, tool.id, c.cx, c.cy);
+      if (err) { fail(err); return true; }
+      const p = FP.cornerPoint(FP.layout(state), c.cx, c.cy);
+      FP.fx.burst(p.x, p.y, FP.ATTACHMENTS[tool.id].color, 12, 0.7);
+      FP.sfx("plant");
+      if (!state.attachmentBag[tool.id]) ui.tool = null;
+      ui.renderHotbar();
+      return true;
+    }
+    const c = FP.cornerAt(state, m.x, m.y, 0.22);
+    if (!c || !FP.attachmentAt(state, c.cx, c.cy)) return false;
+    const id = "att:" + c.cx + ":" + c.cy;
+    if (ui.selected === id) ui.closeBuilding();
+    else ui.openAttachment(c.cx, c.cy);
+    return true;
+  }
 
   // Holding the mouse down and dragging plants or harvests a whole row at once.
   canvas.addEventListener("pointermove", e => {
@@ -708,8 +736,7 @@
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "Escape") {
-      if (FP.greenhouseMenu.open) FP.greenhouseMenu.hide();
-      else if (FP.town.modal) FP.town.closeModal();
+      if (FP.town.modal) FP.town.closeModal();
       else if (FP.town.open) actions.closeTown();
       ui.setTool(null);
       ui.closeBuilding();
@@ -752,7 +779,8 @@
   let last = performance.now();
   let nextCheck = 0;
   let nextWeatherTick = 0;
-  let nextGreenhouse = 0;
+  let nextSecond = 0;
+  let nextClimateMods = 0;
   let weatherChanged = 0; // plants the current weather has changed, for the message when it ends
 
   function updateWeather(now) {
@@ -825,7 +853,6 @@
     FP.renderer.forget();
     FP.renderer.clearWorkers();
     ui.closeBuilding();
-    FP.greenhouseMenu.hide();
     ui.tool = null;
     view.carrying = null;
     view.pendingDig = null;
@@ -953,10 +980,12 @@
 
       updateWeather(now);
       updateTime(now);
-      if (now >= nextGreenhouse) {
-        nextGreenhouse = now + 1000;
-        FP.greenhouseTick(state, now);
-        FP.greenhouseMenu.tick();
+      if (now >= nextSecond) {
+        nextSecond = now + 1000;
+        // Heat, humidity, and attachments work on every floor. Only the floor on screen sparkles.
+        const rollMods = now >= nextClimateMods;
+        if (rollMods) nextClimateMods = now + 5000;
+        FP.eachFloor(state, (i, showing) => FP.climateTick(state, now, 1000, rollMods, showing ? celebrateMod : () => {}));
         FP.updateRequests(state, now);
         FP.town.tickRequests();
       }
@@ -999,10 +1028,13 @@
   tutorial.init(game);
   FP.blackHole.init(game);
   FP.town.init(game);
-  FP.greenhouseMenu.init(game);
   maybeStartTownIntro(2500); // for farms that rebirthed before the Town existed
   lastLevel = FP.level(state);
 
+  if (state.loadNotice) {
+    setTimeout(() => toast(state.loadNotice, true), 1500);
+    delete state.loadNotice;
+  }
   if (firstVisit) {
     ui.tool = { type: "seed", seedId: "carrot" };
     ui.renderHotbar();

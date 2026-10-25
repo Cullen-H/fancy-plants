@@ -36,6 +36,7 @@
     if (state.seeds[seedId] <= 0) delete state.seeds[seedId];
     const plant = FP.newPlant(state, seed, now);
     state.plots[fit.y][fit.x] = plant;
+    if (FP.needsClimate(seed) && !FP.climateFits(seed, FP.tileClimate(state, fit.x, fit.y))) FP.pausePlant(plant, now);
     state.stats.planted++;
     FP.rollLucky(state, plant);
     return null;
@@ -148,6 +149,7 @@
     state.plots = state.floors[i].plots;
     state.buildings = state.floors[i].buildings;
     state.tiles = state.floors[i].tiles;
+    state.attachments = state.floors[i].attachments;
   };
 
   // Runs fn once for every floor, with that floor showing, then puts the original floor back.
@@ -167,7 +169,7 @@
   FP.floorsAllowed = state => Math.min(FP.MAX_FLOORS, 1 + FP.skillLevel(state, "floors"));
   FP.floorCost = state => FP.FLOOR_PRICES[state.floors.length - 1];
 
-  const emptyFloor = state => ({ plots: FP.makeGrid(state.cols, state.rows), buildings: [], tiles: FP.makeGrid(state.cols, state.rows) });
+  const emptyFloor = state => ({ plots: FP.makeGrid(state.cols, state.rows), buildings: [], tiles: FP.makeGrid(state.cols, state.rows), attachments: [] });
 
   FP.buyFloor = function (state) {
     if (state.floors.length >= FP.MAX_FLOORS) return "Your farm already has every floor.";

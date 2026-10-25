@@ -42,6 +42,22 @@
     return { x, y };
   };
 
+  // Where a corner point between plots sits on screen. Corner (0, 0) is the top left of the farm.
+  FP.cornerPoint = function (L, cx, cy) {
+    const step = L.size + L.gap;
+    return { x: L.x0 + cx * step - L.gap / 2, y: L.y0 + cy * step - L.gap / 2 };
+  };
+
+  // The corner nearest the mouse, if it's within reach (as a share of a plot's size).
+  FP.cornerAt = function (state, mx, my, reach) {
+    const L = FP.layout(state);
+    const step = L.size + L.gap;
+    const cx = Math.round((mx - L.x0 + L.gap / 2) / step), cy = Math.round((my - L.y0 + L.gap / 2) / step);
+    if (!FP.cornerValid(state, cx, cy)) return null;
+    const p = FP.cornerPoint(L, cx, cy);
+    return Math.hypot(mx - p.x, my - p.y) <= L.size * reach ? { cx, cy } : null;
+  };
+
   // ---------- Effects ----------
 
   const fx = FP.fx = { items: [] };
@@ -731,49 +747,7 @@
     outlinedFill(ctx, extra || "#bfe6ff", 1.5);
   }
 
-  // A glass house. Plants inside show through the panes as colored dots.
-  function greenhouse(ctx, r, t, b) {
-    const s = r.s, x = r.x + s * 0.12, w = s * 0.76, base = r.y + s * 0.9, h = s * 0.42;
-    ctx.beginPath();
-    ctx.ellipse(r.x + s / 2, base + 2, w * 0.6, s * 0.06, 0, 0, TAU);
-    ctx.fillStyle = "rgba(40,20,8,0.3)";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x, base);
-    ctx.lineTo(x, base - h);
-    ctx.lineTo(x + w / 2, base - h - s * 0.22);
-    ctx.lineTo(x + w, base - h);
-    ctx.lineTo(x + w, base);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(190,235,255,0.75)";
-    ctx.fill();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = "#f4f7f8";
-    ctx.stroke();
-    if (b && b.inner) {
-      b.inner.plots.forEach((p, i) => {
-        if (!p) return;
-        ctx.beginPath();
-        ctx.arc(x + w * (0.22 + (i % 3) * 0.28), base - h * (0.2 + Math.floor(i / 3) * 0.28), s * 0.04, 0, TAU);
-        ctx.fillStyle = FP.isRipe(p, Date.now()) ? FP.SEED_BY_ID[p.seedId].color : "#5cb84a";
-        ctx.fill();
-      });
-    }
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    for (let i = 1; i < 3; i++) { ctx.moveTo(x + w * i / 3, base); ctx.lineTo(x + w * i / 3, base - h); }
-    ctx.moveTo(x, base - h / 2); ctx.lineTo(x + w, base - h / 2);
-    ctx.moveTo(x + w / 2, base - h); ctx.lineTo(x + w / 2, base - h - s * 0.22);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(x + w * 0.3, base - h * 0.75, s * 0.06, s * 0.02, -0.6, 0, TAU);
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.fill();
-  }
-
   const BUILDINGS = {
-    greenhouse,
     waterer(ctx, r) {
       house(ctx, r, "#4b8bff", "#e9d9bd");
       // A little bucket by the door
@@ -1297,18 +1271,28 @@
   }
 
   function drawTooltip(ctx, state, view, now, t) {
+    if (view.mouse && !(view.tool && view.tool.type === "attachment")) {
+      const c = FP.cornerAt(state, view.mouse.x, view.mouse.y, 0.22);
+      const a = c && FP.attachmentAt(state, c.cx, c.cy);
+      if (a && view.selected !== "att:" + c.cx + ":" + c.cy) return drawSimpleTooltip(ctx, view, FP.ATTACHMENTS[a.id].name, "Click it to pick it up.", FP.ATTACHMENTS[a.id].color);
+    }
     if (!view.hover || !view.mouse) return;
     const b = FP.buildingAt(state, view.hover.x, view.hover.y);
     if (b) return view.selected === b.uid ? null : drawBuildingTooltip(ctx, b, view);
     const occ = FP.occupantAt(state, view.hover.x, view.hover.y);
     if (!occ) {
       const tile = FP.tileAt(state, view.hover.x, view.hover.y);
-      return tile ? drawSimpleTooltip(ctx, view, FP.TILES[tile].name, tile === "water" ? "Only water plants grow here." : "Anything can grow here.", "#c9a26b") : null;
+      const c = FP.tileClimate(state, view.hover.x, view.hover.y);
+      const climate = "Heat: " + FP.heatName(c.heat) + ". Humidity: " + FP.humidName(c.humid) + ".";
+      if (!tile && !FP.attachmentsOn(state, view.hover.x, view.hover.y).length) return null;
+      return drawSimpleTooltip(ctx, view, tile ? FP.TILES[tile].name : "Soil", climate, "#c9a26b");
     }
     const plant = occ.plant;
     const seed = FP.SEED_BY_ID[plant.seedId];
     const rarity = FP.RARITIES[seed.rarity];
+    const climateWait = !plant.needsFeed && plant.pausedAt && FP.needsClimate(seed);
     let status = plant.needsFeed ? "Needs Fertilizer to start growing"
+      : climateWait ? "Waiting for a plot that is " + FP.climateWanted(seed)
       : FP.isRipe(plant, now) ? "Ready to harvest" : "Ready in " + FP.formatTime(FP.timeLeft(plant, now));
     if (plant.fenced) status += ", fenced in";
     if (plant.sealed) status += ", " + FP.MODS[plant.sealed].name + " sealed";
@@ -1414,6 +1398,7 @@
     const isHover = (x, y) => view.hover && view.hover.x === x && view.hover.y === y;
 
     drawTiles(ctx, state, L, t);
+    drawClimate(ctx, state, L);
 
     // The range of the selected or hovered building shows on the soil.
     const hoveredBuilding = view.hover && FP.buildingAt(state, view.hover.x, view.hover.y);
@@ -1480,6 +1465,7 @@
       drawBuildingsInRow(ctx, state, L, y, t);
     }
 
+    drawAttachments(ctx, state, L, t, view);
     updateWalkers(state, L, dt);
     drawPulses(ctx, dt);
     drawWalkers(ctx, state, L, t);
@@ -1505,6 +1491,7 @@
         if (!plant) continue;
         const r = plantRect(L, x, y, plant);
         if (plant.needsFeed) drawNeedsFeed(ctx, r, t);
+        else if (plant.pausedAt && FP.needsClimate(FP.SEED_BY_ID[plant.seedId])) drawNeedsClimate(ctx, r, t, FP.SEED_BY_ID[plant.seedId]);
         else drawStatus(ctx, plant, r, now, t, x * 7.3 + y * 3.1);
         drawModPips(ctx, plant, r, t);
       }
@@ -1522,6 +1509,63 @@
   };
 
   // ---------- Special tiles, big plants, and fences ----------
+
+  // Warm plots get a little orange, cool ones a little blue, wet ones darker, and dry ones paler.
+  // Only floors with attachments or special tiles have any climate to show.
+  function drawClimate(ctx, state, L) {
+    if (!state.attachments.length) return;
+    for (let y = 0; y < state.rows; y++) {
+      for (let x = 0; x < state.cols; x++) {
+        if (!FP.attachmentsOn(state, x, y).length) continue;
+        const c = FP.tileClimate(state, x, y);
+        const r = FP.plotRect(L, x, y);
+        FP.roundRect(ctx, r.x + 3, r.y + 3, r.s - 6, r.s - 6, r.s * 0.1);
+        if (c.heat) {
+          ctx.fillStyle = c.heat > 0 ? `rgba(255,110,30,${0.16 * c.heat})` : `rgba(70,150,255,${-0.18 * c.heat})`;
+          ctx.fill();
+        }
+        if (c.humid !== 0 && FP.tileAt(state, x, y) !== "water") {
+          ctx.fillStyle = c.humid > 0 ? "rgba(30,50,90,0.16)" : "rgba(255,235,180,0.22)";
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // Attachments sit on the corners between plots. Holding one shows where it would go and the plots it would touch.
+  function drawAttachments(ctx, state, L, t, view) {
+    const tool = view.tool;
+    const placing = tool && tool.type === "attachment" && view.mouse ? FP.cornerAt(state, view.mouse.x, view.mouse.y, 0.6) : null;
+    if (placing) {
+      for (const [x, y] of [[placing.cx - 1, placing.cy - 1], [placing.cx, placing.cy - 1], [placing.cx - 1, placing.cy], [placing.cx, placing.cy]]) {
+        if (x >= 0 && y >= 0 && x < state.cols && y < state.rows) plotOutline(ctx, FP.plotRect(L, x, y), "#8be04e");
+      }
+    }
+    const size = L.size * 0.42;
+    for (const a of state.attachments) {
+      const p = FP.cornerPoint(L, a.cx, a.cy);
+      const selected = view.selected === "att:" + a.cx + ":" + a.cy;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + size * 0.36, size * 0.42, size * 0.13, 0, 0, TAU);
+      ctx.fillStyle = "rgba(40,20,8,0.3)";
+      ctx.fill();
+      if (selected) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size * 0.6, 0, TAU);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#fff3a0";
+        ctx.stroke();
+      }
+      const bob = a.id === "fan" || a.id === "campfire" ? Math.sin(t * 6 + a.cx) * 1.2 : 0;
+      ctx.drawImage(FP.attachmentCanvas(a.id), p.x - size / 2, p.y - size / 2 + bob, size, size);
+    }
+    if (placing) {
+      const p = FP.cornerPoint(L, placing.cx, placing.cy);
+      ctx.globalAlpha = FP.attachmentAt(state, placing.cx, placing.cy) ? 0.25 : 0.65;
+      ctx.drawImage(FP.attachmentCanvas(tool.id), p.x - size / 2, p.y - size / 2, size, size);
+      ctx.globalAlpha = 1;
+    }
+  }
 
   function drawTiles(ctx, state, L, t) {
     if (!state.tiles) return;
@@ -1612,6 +1656,15 @@
       fertilizerIcon = new Image();
       fertilizerIcon.src = FP.toolIconURL(FP.TOOL_BY_ID.fertilizer);
     }
+    drawBubble(ctx, r, t, fertilizerIcon.complete ? fertilizerIcon : null);
+  }
+
+  // The same bubble with a heater or freezer in it, over a plant on a plot that's the wrong heat or humidity.
+  function drawNeedsClimate(ctx, r, t, seed) {
+    drawBubble(ctx, r, t, FP.attachmentCanvas(seed.needs.heat > 0 ? "heater" : seed.needs.heat < 0 ? "freezer" : "sprinkler"));
+  }
+
+  function drawBubble(ctx, r, t, icon) {
     const bob = Math.sin(t * 3) * 2;
     const cx = r.x + r.s * 0.78, cy = r.y + r.s * 0.18 + bob, rad = Math.max(10, r.s * 0.15);
     ctx.beginPath();
@@ -1621,7 +1674,7 @@
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#c9a26b";
     ctx.stroke();
-    if (fertilizerIcon.complete) ctx.drawImage(fertilizerIcon, cx - rad * 0.8, cy - rad * 0.8, rad * 1.6, rad * 1.6);
+    if (icon) ctx.drawImage(icon, cx - rad * 0.8, cy - rad * 0.8, rad * 1.6, rad * 1.6);
   }
 
   // Switching floors slides the new floor in from above or below.

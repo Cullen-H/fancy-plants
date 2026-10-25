@@ -35,7 +35,7 @@
         g.state.tileKits.sand = (g.state.tileKits.sand || 0) + 3;
         g.state.tileKits.water = (g.state.tileKits.water || 0) + 3;
         g.state.fences += 3;
-        g.state.workerBag.push({ workerId: "greenhouse", level: 1 });
+        FP.ATTACHMENT_IDS.forEach(id => { g.state.attachmentBag[id] = (g.state.attachmentBag[id] || 0) + 2; });
       }],
       ["Unlock all floors and sizes", g => { Object.assign(g.state.rebirth.skills, { wide: 3, floors: 2 }); FP.ensureFloors(g.state); }],
       ["Open black hole", g => g.action("openVoid", {})],

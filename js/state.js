@@ -1,7 +1,7 @@
 // Creating, saving, and loading the game state.
 (function (FP) {
   const SAVE_KEY = "fancyPlants.save";
-  const SAVE_VERSION = 10;
+  const SAVE_VERSION = 11;
 
   const newStats = () => ({ planted: 0, harvested: 0, earned: 0, runEarned: 0, modsGained: 0, hired: 0, best: 0, byRarity: [0, 0, 0, 0, 0] });
 
@@ -35,10 +35,12 @@
       tileKits: {},                                     // tile kind to count
       fences: 0,                                        // Picket Fences waiting to be placed
       requests: [],                                     // Request Board notes, or { emptyUntil } for an empty spot
+      attachments: [],                                  // attachments on corners of the floor that is showing { id, cx, cy }
+      attachmentBag: {},                                // attachment id to count waiting to be placed
     };
     // Every floor has its own plots, buildings, and tiles. state.plots, state.buildings, and
     // state.tiles always point at the floor that is showing.
-    state.floors = [{ plots: state.plots, buildings: state.buildings, tiles: state.tiles }];
+    state.floors = [{ plots: state.plots, buildings: state.buildings, tiles: state.tiles, attachments: state.attachments }];
     return state;
   };
 
@@ -77,6 +79,7 @@
   // Version 8 added special seeds, tiles, the Green House, and Picket Fences.
   // Version 9 added the Request Board.
   // Version 10 turned the Second Floor and Third Floor skills into one Farm Floors skill.
+  // Version 11 added heat, humidity, and attachments, and took out the Green House.
   // sanitize fills new fields in with defaults, so older saves need nothing extra.
   function migrate(data) {
     if (!data || typeof data !== "object") throw new Error("Save is not an object");
@@ -90,13 +93,12 @@
     return data;
   }
 
-  function cleanGreenhouse(g) {
-    g = g || {};
-    return {
-      plots: Array.from({ length: 9 }, (_, i) => cleanPlant(Array.isArray(g.plots) ? g.plots[i] : null)),
-      temp: FP.clamp(Math.round(num(g.temp, 2)), 0, FP.TEMPS.length - 1),
-      humid: FP.clamp(Math.round(num(g.humid, 1)), 0, FP.HUMIDS.length - 1),
-    };
+  // The Green House was taken out in version 11. Each one is refunded, and each plant
+  // that was growing inside comes back as a seed.
+  const OLD_GREENHOUSE_PRICE = 25000;
+  function refundGreenhouse(refund, b) {
+    refund.count++;
+    ((b.inner && b.inner.plots) || []).forEach(p => { if (p && FP.SEED_BY_ID[p.seedId]) refund.seeds.push(p.seedId); });
   }
 
   const cleanMods = mods => (Array.isArray(mods) ? mods.filter(id => FP.MODS[id]) : []);
@@ -164,24 +166,36 @@
       });
       const buildings = [];
       (Array.isArray(f.buildings) ? f.buildings : []).forEach(b => {
+        if (b && b.workerId === "greenhouse") return refundGreenhouse(refund, b);
         if (!b || !FP.WORKER_BY_ID[b.workerId]) return;
         const x = Math.round(num(b.x, -1)), y = Math.round(num(b.y, -1));
         // Skip buildings that are off the farm or on top of a plant or another building.
         if (x < 0 || y < 0 || x >= s.cols || y >= s.rows || plots[y][x]) return;
         if (buildings.some(o => o.x === x && o.y === y)) return;
         const clean = { uid: String(b.uid || Math.random().toString(36).slice(2, 10)), workerId: b.workerId, x, y, level: level(b.level), lastWork: now };
-        if (b.workerId === "greenhouse") clean.inner = cleanGreenhouse(b.inner);
         buildings.push(clean);
       });
-      return { plots, buildings, tiles };
+      const attachments = [];
+      (Array.isArray(f.attachments) ? f.attachments : []).forEach(a => {
+        if (!a || !FP.ATTACHMENTS[a.id]) return;
+        const cx = Math.round(num(a.cx, -1)), cy = Math.round(num(a.cy, -1));
+        if (cx < 0 || cy < 0 || cx > s.cols || cy > s.rows || attachments.some(o => o.cx === cx && o.cy === cy)) return;
+        attachments.push({ id: a.id, cx, cy });
+      });
+      return { plots, buildings, tiles, attachments };
     };
+    const refund = { count: 0, seeds: [] };
     // Saves from before floors had one set of plots and buildings at the top level.
     const floors = Array.isArray(d.floors) && d.floors.length ? d.floors.slice(0, FP.MAX_FLOORS) : [{ plots: d.plots, buildings: d.buildings }];
     s.floors = floors.map(f => cleanFloor(f || {}));
     FP.setFloor(s, intIn(d.floor, 0, s.floors.length - 1, 0));
     s.workerBag = (Array.isArray(d.workerBag) ? d.workerBag : [])
-      .filter(w => w && FP.WORKER_BY_ID[w.workerId])
-      .map(w => w.workerId === "greenhouse" ? { workerId: w.workerId, level: 1, inner: cleanGreenhouse(w.inner) } : { workerId: w.workerId, level: level(w.level) });
+      .filter(w => {
+        if (w && w.workerId === "greenhouse") refundGreenhouse(refund, w);
+        return w && FP.WORKER_BY_ID[w.workerId];
+      })
+      .map(w => ({ workerId: w.workerId, level: level(w.level) }));
+    s.attachmentBag = cleanCounts(d.attachmentBag, FP.ATTACHMENTS);
     s.special = { unlocked: {} };
     for (const id in (d.special && d.special.unlocked) || {}) if (FP.QUESTS[id]) s.special.unlocked[id] = true;
     s.tileKits = cleanCounts(d.tileKits, FP.TILES);
@@ -238,6 +252,13 @@
       if (FP.SKILL_BY_ID[id]) s.rebirth.skills[id] = FP.clamp(Math.floor(num(rb.skills[id], 0)), 0, FP.SKILL_BY_ID[id].max);
     }
     s.savedAt = num(d.savedAt, 0);
+    if (refund.count) {
+      s.coins += refund.count * OLD_GREENHOUSE_PRICE;
+      refund.seeds.forEach(id => { s.seeds[id] = (s.seeds[id] || 0) + 1; });
+      // Shown once when the game starts. It isn't part of the save.
+      s.loadNotice = "The Green House is gone. Frost Orchids and Ember Peppers now grow on the farm when the plot has the right heat and humidity. You got " +
+        FP.formatCoins(refund.count * OLD_GREENHOUSE_PRICE) + " coins back" + (refund.seeds.length ? " and a seed for each plant that was inside." : ".");
+    }
     return s;
   }
 })(window.FP);

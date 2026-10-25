@@ -52,6 +52,7 @@
     ui.els.panel.addEventListener("click", e => {
       const b = e.target.closest("[data-action]");
       if (!b || b.disabled) return;
+      if (settingsClick(b)) return;
       if (b.dataset.action === "shopView") {
         ui.shopView = b.dataset.view;
         ui.renderPanel();
@@ -64,9 +65,9 @@
       const b = e.target.closest(".slot");
       if (b) ui.selectSlot(b.dataset.type, b.dataset.id);
     });
-    // The seed bar scrolls sideways with the mouse wheel once it fills up.
+    // The bar only scrolls sideways. The mouse wheel and trackpad swipes both move it left and right.
     ui.els.slots.addEventListener("wheel", e => {
-      ui.els.slots.scrollLeft += e.deltaY;
+      ui.els.slots.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       e.preventDefault();
     }, { passive: false });
     ui.els.harvestAll.addEventListener("click", () => game.action("harvestAll", {}));
@@ -98,6 +99,25 @@
     ui.refresh();
   };
 
+  // Buttons in Settings and Controls that only change settings, so the game never hears about them.
+  function settingsClick(b) {
+    const d = b.dataset;
+    switch (d.action) {
+      case "controls": ui.capturing = null; ui.setTab("controls"); return true;
+      case "backToOptions": ui.capturing = null; ui.setTab("options"); return true;
+      case "bindKey": ui.capturing = ui.capturing === d.id ? null : d.id; ui.renderPanel(); return true;
+      case "clearKey": FP.setKey(d.id, null); ui.capturing = null; ui.renderPanel(); return true;
+      case "resetKeys": FP.resetKeys(); ui.capturing = null; ui.renderPanel(); ui.game.toast("Every key is back to how it started."); return true;
+      case "notation":
+        FP.settings.notation = d.value;
+        FP.saveSettings();
+        ui.els.coinCount.textContent = FP.formatCoins(Math.round(ui.shownCoins));
+        ui.refresh();
+        return true;
+    }
+    return false;
+  }
+
   ui.refresh = function () {
     ui.renderPanel();
     ui.renderHotbar();
@@ -106,7 +126,7 @@
   ui.setTab = function (tab) {
     ui.tab = tab;
     [...ui.els.tabs.children].forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-    $("#options-btn").classList.toggle("active", tab === "options");
+    $("#options-btn").classList.toggle("active", tab === "options" || tab === "controls");
     ui.renderPanel();
     ui.els.panel.scrollTop = 0;
   };
@@ -336,12 +356,12 @@
       return `<div class="card">${title}<p>Your farm has all ${FP.MAX_FLOORS} floors. The arrows under the Town sign switch between them.</p></div>`;
     }
     if (have >= allowed) {
-      return `<div class="card">${title}<p>Your farm has ${have === 1 ? "one floor" : have + " floors"}. The Farm Floors skill in the black hole lets you build ${have === 1 ? "a second one" : "a third one"}.</p>
+      return `<div class="card">${title}<p>Your farm has ${have === 1 ? "one floor" : have + " floors"}. The Farm Floors skill in the black hole lets you build ${["", "a second one", "a third one", "a fourth one"][have]}.</p>
         <button class="btn wide" disabled>Needs the Farm Floors skill</button></div>`;
     }
     const cost = FP.floorCost(state);
     return `<div class="card">${title}
-      <p>Building a ${have === 1 ? "second" : "third"} floor adds a whole new layer of plots the same size as your farm. Weather reaches every floor, and buildings keep working on floors you aren't looking at.</p>
+      <p>Building a ${["", "second", "third", "fourth"][have]} floor adds a whole new layer of plots the same size as your farm. Weather reaches every floor, and buildings keep working on floors you aren't looking at.</p>
       <button class="btn btn-gold wide ${state.coins < cost ? "poor" : ""}" data-action="buyFloor">${coin}${FP.formatCoins(cost)}</button>
     </div>`;
   }
@@ -545,6 +565,18 @@
           </label>
         </div>
         <div class="card">
+          <div class="card-title">Numbers</div>
+          <p>How big numbers are shortened. Numbers under a million always show in full.</p>
+          <div class="seg">${Object.entries(FP.NOTATIONS).map(([id, name]) =>
+            `<button data-action="notation" data-value="${id}" class="${FP.settings.notation === id ? "on" : ""}">${name}</button>`).join("")}</div>
+          <p class="notation-sample">1,234,567 shows as <b>${FP.formatCoins(1234567)}</b></p>
+        </div>
+        <div class="card">
+          <div class="card-title">Controls</div>
+          <p>Set the keys for harvesting, switching floors, opening menus, and more.</p>
+          <button class="btn wide" data-action="controls">Change controls</button>
+        </div>
+        <div class="card">
           <div class="card-title">Tutorial</div>
           <p>Shows the first time tips again from the start.</p>
           <button class="btn wide" data-action="tutorial">Show the tutorial</button>
@@ -569,7 +601,23 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.7</p>`;
+        <p class="version">Fancy Plants v0.14</p>`;
+    },
+
+    controls() {
+      const rows = FP.KEY_ACTIONS.map(a => {
+        const key = FP.settings.keys[a.id];
+        const waiting = ui.capturing === a.id;
+        return `<li class="key-row">
+          <span class="key-name">${a.name}</span>
+          <button class="keycap ${waiting ? "waiting" : ""} ${key ? "" : "none"}" data-action="bindKey" data-id="${a.id}">${waiting ? "Press a key" : FP.keyName(key)}</button>
+          <button class="key-clear" data-action="clearKey" data-id="${a.id}" ${key ? "" : "disabled"} title="Remove this key">Clear</button>
+        </li>`;
+      }).join("");
+      return `<div class="panel-head"><button class="btn small-back" data-action="backToOptions">Back</button><h2>Controls</h2>
+          <p class="sub">Click a key, then press the key you want. Escape cancels. Keys 1 to 9 always pick from the bar, and Escape always puts things away.</p></div>
+        <ul class="key-list">${rows}</ul>
+        <div class="card"><button class="btn wide" data-action="resetKeys">Reset every key</button></div>`;
     },
   };
 

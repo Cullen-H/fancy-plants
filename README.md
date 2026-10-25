@@ -12,7 +12,7 @@ Open `index.html` in a browser. Nothing needs to be installed. Your farm saves i
 
 Click a seed in the bar at the bottom, then click an empty plot to plant it. Click a ripe plant to harvest it. Holding the mouse down and dragging plants or harvests a whole row.
 
-The number keys 1 to 9 pick items from the bar, Q picks the shovel, H harvests everything that's ripe, and Esc puts down whatever you're holding.
+The number keys 1 to 9 pick items from the bar, Q picks the shovel, H harvests everything that's ripe, and Esc puts down whatever you're holding. The up and down arrows switch floors, and S opens Settings. You can change these keys, and add keys for more things, under Settings and then Controls.
 
 On a phone, hold it sideways. Tapping a plant shows when it will be ready.
 

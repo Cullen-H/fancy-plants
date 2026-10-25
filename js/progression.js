@@ -92,8 +92,8 @@
   FP.SKILLS.push(
     { id: "wide",   branch: 4, tier: 1, name: "Wide Fields",  max: 3, cost: 3,
       desc: "Lets your farm grow bigger. Level 1 allows 9 by 6, level 2 allows 9 by 7, and level 3 allows 10 by 7. You still expand it with coins in the Upgrades tab." },
-    { id: "floors", branch: 4, tier: 2, name: "Farm Floors", max: 2, cost: 6,
-      desc: "Lets you build another floor on your farm for each level, so up to 3 floors in all. Each floor is a whole new layer of plots, and you build it with coins in the Upgrades tab." },
+    { id: "floors", branch: 4, tier: 2, name: "Farm Floors", max: 3, cost: 6,
+      desc: "Lets you build another floor on your farm for each level, so up to 4 floors in all. Each floor is a whole new layer of plots, and you build it with coins in the Upgrades tab." },
   );
   FP.SKILL_BY_ID = {};
   FP.SKILLS.forEach(s => { FP.SKILL_BY_ID[s.id] = s; });

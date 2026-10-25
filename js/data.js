@@ -33,8 +33,8 @@
   FP.MAX_COLS = 8;  // biggest farm without the Wide Fields skill
   FP.MAX_ROWS = 6;
   FP.FARM_SIZES = [[8, 6], [9, 6], [9, 7], [10, 7]]; // biggest farm at each Wide Fields level
-  FP.MAX_FLOORS = 3;
-  FP.FLOOR_PRICES = [100000, 1000000]; // coins for the second and third floors
+  FP.MAX_FLOORS = 4;
+  FP.FLOOR_PRICES = [100000, 1000000, 10000000]; // coins for the second, third, and fourth floors
   FP.SHOP_REFRESH_MS = 3 * 60 * 1000;
 
   // ---------- Modifiers ----------
@@ -88,11 +88,11 @@
   FP.RAINBOW = ["#ff5a5a", "#ffa53a", "#ffe14d", "#6ee36e", "#4bb8ff", "#8a6cff", "#e07cff"];
 
   // ---------- Weather ----------
-  // weight decides how often each weather is picked. Clear weather comes between every other kind.
+  // weight decides how often each weather is picked. A new weather starts as soon as the last one ends.
   // times lists the times of day a weather can start in. Moonlight is part of the day and night clock now.
   // also lists extra modifiers a weather can give. strip means the weather blows modifiers off plants instead.
   FP.WEATHER = [
-    { id: "clear",     name: "Clear Skies",   mod: null,        weight: 0,  start: "The weather cleared up." },
+    { id: "clear",     name: "Clear Skies",   mod: null,        weight: 25, times: "all", start: "The weather cleared up." },
     { id: "rain",      name: "Rain",          mod: "wet",       weight: 30, noun: "rain", times: "all", start: "It started to rain." },
     { id: "sunny",     name: "Sunny",         mod: "heated",    weight: 25, noun: "sunny spell", times: ["morning", "noon", "afternoon"], start: "The sun is beating down on the farm." },
     { id: "snow",      name: "Snow",          mod: "chilled",   weight: 15, noun: "snow", times: "all", start: "Snow is falling." },
@@ -100,7 +100,7 @@
     { id: "fog",       name: "Fog",           mod: "foggy",     weight: 15, noun: "fog", times: ["dawn", "morning", "evening", "latenight"], start: "A thick fog rolled over the farm." },
     { id: "hail",      name: "Hail",          mod: "icy",       weight: 10, noun: "hail", times: ["morning", "noon", "afternoon", "dusk"], start: "Hail is coming down." },
     { id: "thunder",   name: "Thunderstorm",  mod: "shocked",   weight: 6,  noun: "thunderstorm", times: ["afternoon", "dusk", "evening"], start: "A thunderstorm rolled in." },
-    { id: "hurricane", name: "Hurricane",     mod: null,        weight: 4,  noun: "hurricane", times: ["afternoon", "dusk", "evening"], strip: true, start: "A hurricane is tearing across the farm. Fences will keep plants safe." },
+    { id: "hurricane", name: "Hurricane",     mod: null,        weight: 1,  noun: "hurricane", times: ["dusk"], strip: true, start: "A hurricane is tearing across the farm. Fences will keep plants safe." },
     { id: "blizzard",  name: "Blizzard",      mod: "icy",       weight: 3,  noun: "blizzard", times: ["evening", "midnight", "latenight", "dawn"], also: ["chilled"], start: "A blizzard is howling over the farm." },
     { id: "rainbow",   name: "Rainbow",       mod: "lucky",     weight: 5,  noun: "rainbow", times: ["dawn", "morning", "afternoon"], start: "A rainbow appeared over the farm." },
     { id: "bloodmoon", name: "Blood Moon",    mod: "blood",     weight: 4,  noun: "blood moon", times: ["midnight"], start: "The moon turned red." },
@@ -109,7 +109,7 @@
   FP.WEATHER_BY_ID = {};
   FP.WEATHER.forEach(w => { FP.WEATHER_BY_ID[w.id] = w; });
 
-  FP.WEATHER_TIMES = { clear: [90, 180], active: [100, 160], firstClear: 45 }; // seconds
+  FP.WEATHER_TIMES = { clear: [60, 120], active: [100, 160], firstClear: 45 }; // seconds
   FP.WEATHER_TICK_MS = 5000;   // how often weather tries to change plants
   FP.WEATHER_CHANCE = 0.06;    // chance per plant per tick
 

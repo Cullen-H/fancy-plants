@@ -365,7 +365,9 @@ html, body {
   overflow-y: hidden;
 }
 
-#slots::-webkit-scrollbar { height: 0; }
+#slots { touch-action: pan-x; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #c9a676 transparent; }
+#slots::-webkit-scrollbar { height: 5px; }
+#slots::-webkit-scrollbar-thumb { background: #c9a676; border-radius: 3px; }
 
 .slot {
   position: relative;
@@ -984,3 +986,16 @@ html, body {
 .note .btn .coin-icon { display: inline-block; }
 .empty-note { justify-content: center; min-height: 150px; background: rgba(255, 251, 233, 0.6); }
 .empty-note p { color: var(--ink-soft); text-align: center; }
+
+/* ---------- Phase 14: Controls and number notation ---------- */
+.notation-sample { margin: 8px 0 0; font-size: 14px; color: var(--ink-soft); }
+.small-back { float: right; padding: 4px 12px; font-size: 14px; }
+.key-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.key-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fffaf0; border: 2px solid #e6d3b3; border-radius: 10px; }
+.key-name { flex: 1; font-weight: 600; }
+.keycap { min-width: 92px; padding: 5px 10px; font: 700 14px var(--font); color: var(--ink); background: #f3e1c0; border: 2px solid #c9a676; border-bottom-width: 4px; border-radius: 8px; cursor: pointer; }
+.keycap.none { color: var(--ink-soft); font-weight: 600; }
+.keycap.waiting { background: #fff2b0; border-color: #e0a91a; animation: keyPulse 0.9s ease-in-out infinite; }
+@keyframes keyPulse { 50% { transform: scale(1.06); } }
+.key-clear { padding: 4px 8px; font: 600 13px var(--font); color: var(--ink-soft); background: none; border: none; cursor: pointer; }
+.key-clear:disabled { opacity: 0.35; cursor: default; }

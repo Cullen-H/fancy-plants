@@ -37,7 +37,25 @@ window.FP = window.FP || {};
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
   };
 
-  FP.formatCoins = n => Math.floor(n).toLocaleString("en-US");
+  // Numbers under a million show in full. Bigger ones follow the notation picked in Settings:
+  // standard (1.23M), scientific (1.23e6), or exponential (1.23×10⁶).
+  const SUFFIXES = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+  const SUPERSCRIPT = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  const twoPlaces = x => (Math.floor(x * 100 + 1e-9) / 100).toFixed(2);
+  FP.formatCoins = function (n) {
+    n = Math.floor(n);
+    if (!Number.isFinite(n)) return String(n);
+    if (Math.abs(n) < 1e6) return n.toLocaleString("en-US");
+    const sign = n < 0 ? "-" : "";
+    n = Math.abs(n);
+    const style = (FP.settings && FP.settings.notation) || "standard";
+    const exp = Math.floor(Math.log10(n));
+    const group = Math.floor(exp / 3);
+    if (style === "standard" && group < SUFFIXES.length) return sign + twoPlaces(n / Math.pow(10, group * 3)) + SUFFIXES[group];
+    const mantissa = twoPlaces(n / Math.pow(10, exp));
+    if (style === "exponential") return sign + mantissa + "×10" + String(exp).split("").map(d => SUPERSCRIPT[d]).join("");
+    return sign + mantissa + "e" + exp;
+  };
 
   FP.formatTime = function (ms) {
     const total = Math.max(0, Math.ceil(ms / 1000));

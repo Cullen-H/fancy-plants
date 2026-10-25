@@ -6,7 +6,7 @@
   const firstVisit = !state;
   if (!state) state = FP.newState();
 
-  // carrying is the plot a trowel lifted a plant from, while you pick where it goes.
+  // carrying is the plot (and floor) a trowel lifted a plant from, while you pick where it goes.
   const view = { hover: null, mouse: null, tool: null, pendingDig: null, carrying: null };
   const ui = FP.ui;
   const toast = (msg, special) => ui.toast(msg, special);
@@ -264,8 +264,7 @@
       FP.renderer.forget();
       FP.renderer.floorSlide(dir);
       ui.closeBuilding();
-      view.carrying = null;
-      view.pendingDig = null;
+      view.pendingDig = null; // a plant lifted with the Trowel stays in hand
       FP.sfx("click");
       ui.refresh();
     },
@@ -477,15 +476,15 @@
       const from = view.carrying;
       if (!from) {
         if (!plant) return toast("Click a plant to lift it with the Trowel.");
-        view.carrying = { x, y };
-        return toast("Now click an empty plot to move the " + FP.SEED_BY_ID[plant.seedId].name + ".");
+        view.carrying = { x, y, floor: state.floor };
+        return toast("Now click an empty plot to move the " + FP.SEED_BY_ID[plant.seedId].name + ". You can switch floors first.");
       }
-      if (from.x === x && from.y === y) {
+      if (from.x === x && from.y === y && from.floor === state.floor) {
         view.carrying = null;
         return toast("You put the plant back.");
       }
-      const moving = state.plots[from.y][from.x];
-      const err = FP.movePlant(state, from, { x, y });
+      const moving = carriedPlant();
+      const err = FP.movePlant(state, from, { x, y, floor: state.floor });
       if (err) return fail(err);
       view.carrying = null;
       FP.fx.burst(r.x + r.s / 2, r.y + r.s * 0.72, "#7a4e2d", 8);
@@ -603,8 +602,7 @@
     }
     let src;
     if (view.carrying) {
-      const plant = state.plots[view.carrying.y][view.carrying.x];
-      src = FP.seedIconURL(FP.SEED_BY_ID[plant.seedId]);
+      src = FP.seedIconURL(FP.SEED_BY_ID[carriedPlant().seedId]);
     } else if (tool.type === "shovel") src = FP.shovelIconURL();
     else if (tool.type === "tool") src = FP.toolIconURL(FP.TOOL_BY_ID[tool.toolId]);
     else if (tool.type === "building") src = FP.buildingIconURL(FP.WORKER_BY_ID[tool.workerId]);
@@ -620,6 +618,13 @@
   }
 
   const sameCell = (a, b) => a && b && a.x === b.x && a.y === b.y;
+
+  // The plant the Trowel is holding, which may be on another floor.
+  function carriedPlant() {
+    const c = view.carrying;
+    const f = c && state.floors[c.floor];
+    return f ? f.plots[c.y][c.x] : null;
+  }
 
   canvas.addEventListener("pointerdown", e => {
     if (e.button === 2) {
@@ -660,7 +665,48 @@
 
   canvas.addEventListener("contextmenu", e => e.preventDefault());
 
+  // What each rebindable key does. Keys are set in Settings, under Controls.
+  const KEY_DO = {
+    harvestAll: () => actions.harvestAll(),
+    shovel: () => ui.selectSlot("shovel"),
+    sellAll: () => actions.sellAll({}, null),
+    floorUp: () => actions.floor({ dir: 1 }),
+    floorDown: () => actions.floor({ dir: -1 }),
+    town: () => {
+      if (FP.town.open) return actions.closeTown();
+      if (state.rebirth.townSeen) actions.openTown();
+      else toast("The Town opens up after your first rebirth.");
+    },
+    void: () => {
+      if (FP.blackHole.open) return actions.closeVoid();
+      if (state.rebirth.count) actions.openVoid();
+      else toast("The black hole opens up after your first rebirth.");
+    },
+    settings: () => ui.setTab(ui.tab === "options" || ui.tab === "controls" ? "shop" : "options"),
+    tabShop: () => ui.setTab("shop"),
+    tabSell: () => ui.setTab("sell"),
+    tabUpgrades: () => ui.setTab("upgrades"),
+    tabGoals: () => ui.setTab("goals"),
+    tabGuide: () => ui.setTab("guide"),
+  };
+  // These still work while the Town or the black hole is covering the farm.
+  const WORKS_ANYWHERE = { town: true, void: true };
+
   window.addEventListener("keydown", e => {
+    // Waiting for a new key in the Controls menu.
+    if (ui.capturing) {
+      e.preventDefault();
+      if (e.key !== "Escape") {
+        const key = FP.normalizeKey(e.key);
+        if (FP.reservedKey(key)) toast(FP.keyName(key) + " is already used by the game. Pick another key.");
+        else if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab"].includes(key)) return;
+        else FP.setKey(ui.capturing, key);
+      }
+      ui.capturing = null;
+      ui.renderPanel();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "Escape") {
       if (FP.greenhouseMenu.open) FP.greenhouseMenu.hide();
       else if (FP.town.modal) FP.town.closeModal();
@@ -668,13 +714,16 @@
       ui.setTool(null);
       ui.closeBuilding();
     }
-    else if (e.key === "q" || e.key === "Q") ui.selectSlot("shovel");
-    else if (e.key === "h" || e.key === "H") actions.harvestAll();
-    else if (e.key === "PageUp") actions.floor({ dir: 1 });
-    else if (e.key === "PageDown") actions.floor({ dir: -1 });
     else if (/^[1-9]$/.test(e.key)) {
+      if (FP.town.open || FP.blackHole.open) return;
       const item = ui.hotbarItems()[Number(e.key) - 1];
       if (item) ui.selectSlot(item.type, item.id);
+    } else {
+      const action = FP.keyAction(FP.normalizeKey(e.key));
+      if (!action) return;
+      if ((FP.town.open || FP.blackHole.open) && !WORKS_ANYWHERE[action.id]) return;
+      e.preventDefault();
+      KEY_DO[action.id]();
     }
   });
 
@@ -917,7 +966,7 @@
       // Buildings work on every floor. Only the floor on screen animates.
       FP.eachFloor(state, (i, showing) => FP.runWorkers(state, now, showing ? onWorkerEvent : () => {}));
       announceLucky();
-      if (view.carrying && !state.plots[view.carrying.y][view.carrying.x]) view.carrying = null;
+      if (view.carrying && !carriedPlant()) view.carrying = null;
 
       view.tool = ui.tool;
       view.selected = ui.selected;

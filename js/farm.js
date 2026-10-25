@@ -360,10 +360,11 @@
 
   FP.currentWeather = state => FP.WEATHER_BY_ID[state.weather.id];
 
-  // Only weathers that can start at this time of day are in the running.
+  // Only weathers that can start at this time of day are in the running, and never the one that just ended.
   function pickWeather(state, now) {
     const time = FP.timeOfDay(now).id;
-    const options = FP.WEATHER.filter(w => w.weight > 0 && FP.weatherUnlocked(state, w.id) && (w.times === "all" || w.times.includes(time)));
+    const options = FP.WEATHER.filter(w => w.weight > 0 && w.id !== state.weather.id &&
+      (w.id === "clear" || FP.weatherUnlocked(state, w.id)) && (w.times === "all" || w.times.includes(time)));
     if (!options.length) return FP.WEATHER_BY_ID.clear;
     let roll = Math.random() * options.reduce((sum, w) => sum + w.weight, 0);
     for (const w of options) {
@@ -373,17 +374,13 @@
     return options[0];
   }
 
-  // Clear skies come between every other kind of weather.
-  // A forecast from the Weather Station replaces the next weather, whatever the time of day.
+  // The next weather starts the moment the last one ends.
+  // A forecast from the Weather Station becomes the next weather, whatever the time of day.
   FP.nextWeather = function (state, now) {
-    const wasClear = state.weather.id === "clear";
     const forecast = state.weather.forecast;
-    let next;
-    if (wasClear && forecast) next = FP.WEATHER_BY_ID[forecast];
-    else next = wasClear ? pickWeather(state, now) : FP.WEATHER_BY_ID.clear;
-    const [lo, hi] = next.id !== "clear" ? FP.WEATHER_TIMES.active : FP.WEATHER_TIMES.clear;
+    const next = forecast ? FP.WEATHER_BY_ID[forecast] : pickWeather(state, now);
+    const [lo, hi] = next.id === "clear" ? FP.WEATHER_TIMES.clear : FP.WEATHER_TIMES.active;
     state.weather = { id: next.id, endsAt: now + FP.randInt(lo, hi) * 1000 };
-    if (forecast && !(wasClear && forecast)) state.weather.forecast = forecast; // still waiting its turn
     return next;
   };
 
@@ -505,9 +502,11 @@
     return { modId: order[(order.indexOf(plant.sealed) + 1) % order.length] };
   };
 
+  // from and to are { x, y, floor }. A plant can move to another floor.
   FP.movePlant = function (state, from, to) {
     if (!state.tools.trowel) return "You're out of Trowel uses.";
-    const plant = state.plots[from.y][from.x];
+    const fromPlots = state.floors[from.floor].plots;
+    const plant = fromPlots[from.y][from.x];
     const seed = FP.SEED_BY_ID[plant.seedId];
     if (FP.plantSize(plant) > 1) return "The " + seed.name + " is too big to move.";
     if (!FP.isFree(state, to.x, to.y)) return "That plot isn't empty.";
@@ -515,8 +514,8 @@
     const needs = seed.needs || {};
     if (needs.tile && tile !== needs.tile) return "The " + seed.name + " has to stay on " + FP.TILES[needs.tile].name.toLowerCase() + ".";
     if (!needs.tile && tile === "water") return "Only water plants can grow in a pond.";
-    state.plots[to.y][to.x] = state.plots[from.y][from.x];
-    state.plots[from.y][from.x] = null;
+    state.plots[to.y][to.x] = plant;
+    fromPlots[from.y][from.x] = null;
     spendTool(state, "trowel");
     return null;
   };

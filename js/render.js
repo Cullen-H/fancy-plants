@@ -1402,7 +1402,8 @@
     ctx.translate(0, slide);
     ctx.drawImage(farmLayer(state, L), 0, 0, W, H);
     const tool = view.tool;
-    const carrying = view.carrying;
+    const carrying = view.carrying && view.carrying.floor === state.floor ? view.carrying : null;
+    const holding = !!view.carrying;
     const isHover = (x, y) => view.hover && view.hover.x === x && view.hover.y === y;
 
     drawTiles(ctx, state, L, t);
@@ -1427,7 +1428,7 @@
         if (building && (view.selected === building.uid || hovered)) plotOutline(ctx, r, "#fff3a0");
         else if (hovered && tool && tool.type === "building" && FP.isFree(state, x, y)) plotOutline(ctx, r, "#8be04e");
         else if (carrying && carrying.x === x && carrying.y === y) plotOutline(ctx, r, "#7fd3ff");
-        else if (carrying && hovered && !plant) plotOutline(ctx, r, "#7fd3ff");
+        else if (holding && hovered && !plant) plotOutline(ctx, r, "#7fd3ff");
         else if (view.pendingDig && view.pendingDig.x === x && view.pendingDig.y === y) plotOutline(ctx, r, "#e5533d");
         else if (hovered && tool && tool.type === "shovel" && plant) plotOutline(ctx, r, "#e5533d");
         else if (hovered && tool && tool.type === "tool" && toolFits(state, tool, plant, now)) plotOutline(ctx, r, "#8be04e");

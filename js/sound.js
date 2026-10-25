@@ -3,12 +3,60 @@
 (function (FP) {
   const SETTINGS_KEY = "fancyPlants.settings";
 
-  FP.settings = { volume: 0.6, calm: false };
+  // Actions that can have a key. key is the default, or null for none.
+  FP.KEY_ACTIONS = [
+    { id: "harvestAll", name: "Harvest all",       key: "h" },
+    { id: "shovel",     name: "Pick up the shovel", key: "q" },
+    { id: "sellAll",    name: "Sell everything",   key: null },
+    { id: "floorUp",    name: "Go up a floor",     key: "ArrowUp" },
+    { id: "floorDown",  name: "Go down a floor",   key: "ArrowDown" },
+    { id: "town",       name: "Open the Town",     key: null },
+    { id: "void",       name: "Open the black hole", key: null },
+    { id: "settings",   name: "Open Settings",     key: "s" },
+    { id: "tabShop",    name: "Open the Shop tab", key: null },
+    { id: "tabSell",    name: "Open the Sell tab", key: null },
+    { id: "tabUpgrades", name: "Open the Upgrades tab", key: null },
+    { id: "tabGoals",   name: "Open the Goals tab", key: null },
+    { id: "tabGuide",   name: "Open the Guide tab", key: null },
+  ];
+  FP.NOTATIONS = { standard: "Standard", scientific: "Scientific", exponential: "Exponential" };
+
+  const defaultKeys = () => Object.fromEntries(FP.KEY_ACTIONS.map(a => [a.id, a.key]));
+
+  FP.settings = { volume: 0.6, calm: false, notation: "standard", keys: defaultKeys() };
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
     if (Number.isFinite(saved.volume)) FP.settings.volume = FP.clamp(saved.volume, 0, 1);
     if (typeof saved.calm === "boolean") FP.settings.calm = saved.calm;
+    if (FP.NOTATIONS[saved.notation]) FP.settings.notation = saved.notation;
+    for (const a of FP.KEY_ACTIONS) {
+      const k = saved.keys && saved.keys[a.id];
+      if (k === null || typeof k === "string") FP.settings.keys[a.id] = k;
+    }
   } catch (err) { /* keep the defaults */ }
+
+  // Letters are stored lowercase so Shift and Caps Lock don't matter.
+  FP.normalizeKey = key => (key.length === 1 ? key.toLowerCase() : key);
+
+  // Keys a player can't take, because the game already uses them for something fixed.
+  FP.reservedKey = key => key === "Escape" || /^[1-9]$/.test(key);
+
+  FP.keyAction = key => FP.KEY_ACTIONS.find(a => FP.settings.keys[a.id] === key) || null;
+
+  // Gives a key to an action and takes it away from any other action that had it.
+  FP.setKey = function (id, key) {
+    for (const a of FP.KEY_ACTIONS) if (FP.settings.keys[a.id] === key) FP.settings.keys[a.id] = null;
+    FP.settings.keys[id] = key;
+    FP.saveSettings();
+  };
+
+  FP.resetKeys = function () {
+    FP.settings.keys = defaultKeys();
+    FP.saveSettings();
+  };
+
+  const KEY_NAMES = { " ": "Space", ArrowUp: "Up Arrow", ArrowDown: "Down Arrow", ArrowLeft: "Left Arrow", ArrowRight: "Right Arrow" };
+  FP.keyName = key => (!key ? "None" : KEY_NAMES[key] || (key.length === 1 ? key.toUpperCase() : key.replace(/([a-z])([A-Z])/g, "$1 $2")));
 
   FP.saveSettings = function () {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(FP.settings)); } catch (err) { /* not saved */ }

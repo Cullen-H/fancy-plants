@@ -48,6 +48,7 @@
     state.weather.forecast = pick.id;
     // If the sky is clear, the forecast weather shows up soon instead of after a long wait.
     if (state.weather.id === "clear") state.weather.endsAt = Math.min(state.weather.endsAt, now + 15000);
+    // Otherwise it starts the moment the current weather ends.
     return { weather: pick, score };
   };
 

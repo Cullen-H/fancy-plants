@@ -74,6 +74,24 @@ Phase 15 is done. There are 14 new modifiers and 13 new fusions. Each fusion is 
 
 Phase 16 is done. Every plot has a heat (Cold, Cool, Normal, Warm, or Hot) and a humidity (Dry, Normal, or Humid). Plain soil is normal, sand is dry, and water is cool and humid. Attachments sit on the corners between plots and change every plot they touch, and warm or cool plots show a light orange or blue tint. The Sprinkler adds humidity and makes plants grow 15% faster, and the Dehumidifier dries plots out. The Campfire and Heater warm plots up, and the Electric Fan, Block of Ice, and Freezer cool them down. The Heater, Fan, Ice, and Freezer also give nearby plants Heated, Breeze, Chilled, or Frozen now and then. The Green House is gone. Frost Orchids now grow on plots that are cold and humid, and Ember Peppers on plots that are hot and dry. Old saves got the Green House's price back, plus a seed for each plant that was inside. A red barn called Farming Tools took one of the boarded up spots in the Town, and it sells the attachments, the tile kits, and the Picket Fence. The Seed Shop only sells special seeds now.
 
+Phase 17 is done. The Casino games are animated now. In Blackjack, cards slide out of a deck on the table and flip face up, and the dealer turns the hidden card over before drawing. In Slots, each reel scrolls a long strip of crops and stops on the result, left to right, with the clicks slowing down as the reels stop. The coin in Coin Flip spins up into the air and lands with a bounce. In Rock Paper Scissors, both hands shake three times before they show what was thrown. None of the odds or payouts changed.
+
+## Plants after Rebirth 3 (concepts)
+
+These are ideas to edit together before any of them get built. They use the six names from the renamed references table, and each one leans on what it was originally based on. All of them unlock once a farm has rebirthed three times.
+
+**Pocket Berry** comes from the berries in the pocket monster games. It would be a Rare seed in the regular shop that grows fast, costs little, and regrows. Each harvest could come out in one of several berry colors, and selling a mix of colors together could pay a small bonus, like blending berries into a treat.
+
+**Cat Tower Bean** comes from the bean the cat grows at the top of his tower, which heals anyone who eats one. It would be an Epic seed in the regular shop that grows on a tall vine. Harvesting one could instantly ripen a few plants next to it, the same way the bean brings someone back to full strength.
+
+**Goddess Rice** comes from the harvest goddess who grows rice in flooded paddies. It would be a special seed in the Seed Shop that has to be planted on a water tile kept warm with a Campfire or Heater. Rice planted in a full row of paddies could grow faster than rice planted alone.
+
+**Swirlfruit** comes from the swirly fruits that give strange powers but leave you unable to swim. It would be a Legendary special seed that needs a plot that is hot and humid. It can never become Wet, so rain and Flash Floods do nothing to it, but it could have a better chance at rarer modifiers to make up for that.
+
+**World Tree Sapling** comes from the giant tree that holds up the world in old myths. It would be a Mythic special seed that covers 3 by 3 plots and takes a long time to grow. It regrows forever, and every harvest is worth a great deal.
+
+**Philosopher's Bloom** comes from the Philosopher's Stone of old alchemy, which was said to turn plain metal into gold. It would be a Mythic special seed that turns one of its modifiers into Golden each time it is harvested, so a plain bloom slowly becomes a valuable one.
+
 ## Later phases
 
 | Phase | What gets added |

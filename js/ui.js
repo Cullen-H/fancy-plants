@@ -618,7 +618,7 @@
           <p>This erases your farm, your coins, and your seeds.</p>
           <button class="btn btn-red wide" data-action="reset">Reset farm</button>
         </div>
-        <p class="version">Fancy Plants v0.16</p>`;
+        <p class="version">Fancy Plants v0.17</p>`;
     },
 
     controls() {

@@ -1109,6 +1109,10 @@
   // ---------- Casino games ----------
 
   const HANDS = ["Rock", "Paper", "Scissors"];
+  const HAND_PICS = ["✊", "✋", "✌️"];
+  const SHAKE_MS = 900;   // both hands shake three times before they show
+  const DEAL_MS = 380;    // time between cards being dealt
+  const FLIP_MS = 450;    // the dealer turning over the hidden card
   const beats = (a, b) => (a === 0 && b === 2) || (a === 1 && b === 0) || (a === 2 && b === 1);
 
   const SUITS = ["♠", "♥", "♦", "♣"];
@@ -1131,9 +1135,13 @@
     while (total > 21 && aces) { total -= 10; aces--; }
     return total;
   }
-  const cardHTML = (c, hidden) => hidden
-    ? `<span class="pcard back"></span>`
-    : `<span class="pcard ${c.s === "♥" || c.s === "♦" ? "red" : ""}">${c.r}<i>${c.s}</i></span>`;
+  // A card with a front and a back. deal slides it out from the deck and flips it face up,
+  // and reveal turns a face down card over. A face down card's front stays blank.
+  const cardHTML = (c, hidden, deal, reveal, delay) => {
+    const cls = ["pcard3d", hidden ? "down" : "", deal ? "deal" : "", reveal ? "reveal" : ""].join(" ");
+    const front = hidden ? `<span class="pcard face"></span>` : `<span class="pcard face ${c.s === "♥" || c.s === "♦" ? "red" : ""}">${c.r}<i>${c.s}</i></span>`;
+    return `<span class="${cls}" style="animation-delay:${delay || 0}ms">${front}<span class="pcard face back"></span></span>`;
+  };
 
   const SLOT_SYMBOLS = ["carrot", "tomato", "pumpkin", "corn", "starfruit", "moonflower"];
 
@@ -1142,45 +1150,76 @@
     rps(m) { m.state = { you: 0, them: 0, last: null }; m.done = null; },
     blackjack(m) {
       const deck = newDeck();
-      m.state = { deck, you: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()] };
+      // shown counts the cards already on the table, so only new cards get dealt in.
+      m.state = { deck, you: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], shown: { you: 0, dealer: 0, revealed: false } };
       m.done = null;
       const you = handValue(m.state.you), dealer = handValue(m.state.dealer);
       if (you === 21 || dealer === 21) {
-        m.state.reveal = true;
-        if (you === 21 && dealer === 21) return setTimeout(() => finish(m, FP.CASINO.push, "You both have blackjack, so it's a tie."), 0);
-        if (you === 21) return setTimeout(() => finish(m, FP.CASINO.natural, "Blackjack! You win."), 0);
-        return setTimeout(() => finish(m, FP.CASINO.lose, "The dealer has blackjack. You lose."), 0);
+        m.state.busy = true;
+        const settle = () => {
+          m.state.reveal = true;
+          if (you === 21 && dealer === 21) return finish(m, FP.CASINO.push, "You both have blackjack, so it's a tie.");
+          if (you === 21) return finish(m, FP.CASINO.natural, "Blackjack! You win.");
+          finish(m, FP.CASINO.lose, "The dealer has blackjack. You lose.");
+        };
+        setTimeout(settle, 4 * 250 + 500);
       }
     },
-    slots(m) { m.state = { reels: ["carrot", "tomato", "pumpkin"], spinning: false }; m.done = null; },
+    slots(m) { m.state = { reels: ["carrot", "tomato", "pumpkin"], spin: null }; m.done = null; },
   };
 
   const GAME_VIEWS = {
     coin(state) {
       const m = town.modal;
-      return `<div class="coin-flip ${m.state.flipping ? "flipping" : ""}"><span class="coin-face">${m.state.face || "?"}</span></div>
+      return `<div class="coin-flip ${m.state.flipping ? "flipping" : ""}"><span class="coin-face ${m.done ? "landed" : ""}">${m.state.flipping ? "" : m.state.face || "?"}</span></div>
         ${m.done ? resultBox(m) : m.state.flipping ? `<p class="modal-sub">The coin is in the air...</p>`
           : `<p class="modal-sub">Call it.</p><div class="moves"><button class="btn" data-move="Heads">Heads</button><button class="btn" data-move="Tails">Tails</button></div>`}`;
     },
     rps(state) {
       const m = town.modal, s = m.state;
-      const last = s.last ? `<p class="modal-sub">You threw ${HANDS[s.last.you]} and the dealer threw ${HANDS[s.last.them]}. ${s.last.text}</p>` : `<p class="modal-sub">First to 2 wins takes it.</p>`;
-      return `<div class="score"><span>You <b>${s.you}</b></span><span>Dealer <b>${s.them}</b></span></div>${last}
-        ${m.done ? resultBox(m) : `<div class="moves">${HANDS.map((h, i) => `<button class="btn" data-move="${i}">${h}</button>`).join("")}</div>`}`;
+      const last = s.shaking ? `<p class="modal-sub">Rock, paper, scissors...</p>`
+        : s.last ? `<p class="modal-sub">You threw ${HANDS[s.last.you]} and the dealer threw ${HANDS[s.last.them]}. ${s.last.text}</p>` : `<p class="modal-sub">First to 2 wins takes it.</p>`;
+      const pic = who => s.shaking || !s.last ? HAND_PICS[0] : HAND_PICS[s.last[who]];
+      const pop = s.justShown ? "pop" : "";
+      s.justShown = false;
+      return `<div class="score"><span>You <b>${s.you}</b></span><span>Dealer <b>${s.them}</b></span></div>
+        <div class="rps-hands ${s.shaking ? "shaking" : ""}">
+          <div class="rps-hand"><span class="${pop}">${pic("you")}</span><b>You</b></div>
+          <div class="rps-hand dealer"><span class="${pop}">${pic("them")}</span><b>Dealer</b></div>
+        </div>${last}
+        ${m.done ? resultBox(m) : `<div class="moves">${HANDS.map((h, i) => `<button class="btn" data-move="${i}" ${s.shaking ? "disabled" : ""}>${h}</button>`).join("")}</div>`}`;
     },
     blackjack(state) {
       const m = town.modal, s = m.state;
       const hideDealer = !s.reveal && !m.done;
-      return `<div class="table">
-          <div class="hand"><span class="hand-label">Dealer${hideDealer ? "" : ", " + handValue(s.dealer)}</span>${s.dealer.map((c, i) => cardHTML(c, hideDealer && i === 1)).join("")}</div>
-          <div class="hand"><span class="hand-label">You, ${handValue(s.you)}</span>${s.you.map(c => cardHTML(c)).join("")}</div>
+      const sh = s.shown;
+      const first = sh.you === 0; // the opening deal goes you, dealer, you, dealer
+      const flipping = !hideDealer && !sh.revealed;
+      const cards = (who, hand) => hand.map((c, i) => {
+        const fresh = i >= sh[who];
+        let delay = first ? (i * 2 + (who === "dealer" ? 1 : 0)) * 250 : (i - sh[who]) * DEAL_MS;
+        if (who === "dealer" && flipping && !first) delay += FLIP_MS;
+        return cardHTML(c, hideDealer && who === "dealer" && i === 1, fresh, !fresh && flipping && who === "dealer" && i === 1, fresh ? delay : 0);
+      }).join("");
+      const html = `<div class="table"><span class="deck"></span>
+          <div class="hand"><span class="hand-label">Dealer${hideDealer ? "" : ", " + handValue(s.dealer)}</span>${cards("dealer", s.dealer)}</div>
+          <div class="hand"><span class="hand-label">You, ${handValue(s.you)}</span>${cards("you", s.you)}</div>
         </div>
-        ${m.done ? resultBox(m) : `<div class="moves"><button class="btn" data-move="hit">Hit</button><button class="btn btn-gold" data-move="stand">Stand</button></div>`}`;
+        ${m.done ? resultBox(m) : s.busy ? `<p class="modal-sub">${s.reveal ? "The dealer is playing..." : "Dealing..."}</p>`
+          : `<div class="moves"><button class="btn" data-move="hit">Hit</button><button class="btn btn-gold" data-move="stand">Stand</button></div>`}`;
+      s.shown = { you: s.you.length, dealer: s.dealer.length, revealed: !hideDealer };
+      return html;
     },
     slots(state) {
       const m = town.modal, s = m.state;
-      return `<div class="reels">${s.reels.map(id => `<span class="reel"><img src="${FP.seedIconURL(FP.SEED_BY_ID[id])}" alt=""></span>`).join("")}</div>
-        ${m.done ? resultBox(m) : s.spinning ? `<p class="modal-sub">Spinning...</p>` : `<div class="moves"><button class="btn btn-gold" data-move="spin">Pull the lever</button></div>`}`;
+      const img = id => `<img src="${FP.seedIconURL(FP.SEED_BY_ID[id])}" alt="">`;
+      // While spinning, each reel is a long strip that scrolls up and stops on the result.
+      // A negative delay keeps the strip in the right place if the menu redraws mid spin.
+      const reels = s.spin
+        ? s.spin.strips.map((strip, i) => `<span class="reel"><span class="strip" style="--stop:${-(strip.length - 1) * 88}px; animation-duration:${s.spin.durs[i]}ms; animation-delay:${-(Date.now() - s.spin.started)}ms">${strip.map(img).join("")}</span></span>`).join("")
+        : s.reels.map(id => `<span class="reel">${img(id)}</span>`).join("");
+      return `<div class="reels">${reels}</div>
+        ${m.done ? resultBox(m) : s.spin ? `<p class="modal-sub">Spinning...</p>` : `<div class="moves"><button class="btn btn-gold" data-move="spin">Pull the lever</button></div>`}`;
     },
   };
 
@@ -1199,58 +1238,85 @@
       }, 1100);
     },
     rps(m, move) {
-      if (m.done) return;
-      const s = m.state, you = Number(move), them = Math.floor(Math.random() * 3);
-      let text;
-      if (you === them) text = "That's a tie, so throw again.";
-      else if (beats(you, them)) { s.you++; text = "You take the round."; }
-      else { s.them++; text = "The dealer takes the round."; }
-      s.last = { you, them, text };
+      const s = m.state;
+      if (m.done || s.shaking) return;
+      const you = Number(move), them = Math.floor(Math.random() * 3);
+      s.shaking = true;
       FP.sfx("click");
-      if (s.you === 2) return finish(m, FP.CASINO.rps, "You won the best of 3!");
-      if (s.them === 2) return finish(m, FP.CASINO.lose, "The dealer won the best of 3.");
       renderModal();
+      setTimeout(() => {
+        let text;
+        if (you === them) text = "That's a tie, so throw again.";
+        else if (beats(you, them)) { s.you++; text = "You take the round."; }
+        else { s.them++; text = "The dealer takes the round."; }
+        s.last = { you, them, text };
+        s.shaking = false;
+        s.justShown = true;
+        FP.sfx("click");
+        if (s.you === 2) return finish(m, FP.CASINO.rps, "You won the best of 3!");
+        if (s.them === 2) return finish(m, FP.CASINO.lose, "The dealer won the best of 3.");
+        if (town.modal === m) renderModal();
+      }, SHAKE_MS);
     },
     blackjack(m, move) {
-      if (m.done) return;
       const s = m.state;
+      if (m.done || s.busy) return;
       if (move === "hit") {
         s.you.push(s.deck.pop());
         FP.sfx("click");
-        if (handValue(s.you) > 21) return finish(m, FP.CASINO.lose, "You went over 21. You lose.");
+        if (handValue(s.you) > 21) {
+          s.busy = true;
+          renderModal();
+          return setTimeout(() => finish(m, FP.CASINO.lose, "You went over 21. You lose."), DEAL_MS + 400);
+        }
         return renderModal();
       }
+      // The dealer turns over the hidden card, then draws, and the result shows once the cards land.
       s.reveal = true;
+      s.busy = true;
+      const before = s.dealer.length;
       while (handValue(s.dealer) < 17) s.dealer.push(s.deck.pop());
+      FP.sfx("click");
+      renderModal();
       const you = handValue(s.you), dealer = handValue(s.dealer);
-      if (dealer > 21) return finish(m, FP.CASINO.blackjack, "The dealer went over 21. You win!");
-      if (you > dealer) return finish(m, FP.CASINO.blackjack, "Your " + you + " beats the dealer's " + dealer + ". You win!");
-      if (you === dealer) return finish(m, FP.CASINO.push, "You both have " + you + ", so it's a tie.");
-      finish(m, FP.CASINO.lose, "The dealer's " + dealer + " beats your " + you + ". You lose.");
+      setTimeout(() => {
+        if (dealer > 21) return finish(m, FP.CASINO.blackjack, "The dealer went over 21. You win!");
+        if (you > dealer) return finish(m, FP.CASINO.blackjack, "Your " + you + " beats the dealer's " + dealer + ". You win!");
+        if (you === dealer) return finish(m, FP.CASINO.push, "You both have " + you + ", so it's a tie.");
+        finish(m, FP.CASINO.lose, "The dealer's " + dealer + " beats your " + you + ". You lose.");
+      }, FLIP_MS + (s.dealer.length - before) * DEAL_MS + 500);
     },
     slots(m) {
       const s = m.state;
-      if (s.spinning || m.done) return;
-      s.spinning = true;
+      if (s.spin || m.done) return;
       const final = [0, 1, 2].map(() => SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]);
-      const started = Date.now();
-      // Each reel keeps changing until its stop time, left to right.
-      const tick = setInterval(() => {
-        const elapsed = Date.now() - started;
-        s.reels = s.reels.map((id, i) => elapsed > 700 + i * 450 ? final[i] : SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]);
+      const randomSymbol = () => SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
+      // Each strip starts on the symbol showing now and ends on the result. Later reels spin longer.
+      const strips = final.map((end, i) => [s.reels[i], ...Array.from({ length: 14 + i * 6 }, randomSymbol), end]);
+      const durs = [1000, 1500, 2000];
+      s.spin = { strips, durs, started: Date.now() };
+      renderModal();
+      // Clicks while the reels are moving, slowing down as they stop.
+      let wait = 70;
+      const click = () => {
+        if (!s.spin) return;
         FP.sfx("click");
-        if (elapsed > 700 + 2 * 450) {
-          clearInterval(tick);
-          s.spinning = false;
+        wait *= 1.08;
+        setTimeout(click, wait);
+      };
+      click();
+      setTimeout(() => {
+        {
+          s.spin = null;
+          s.reels = final;
           const [a, b, c] = final;
           if (a === b && b === c) {
             if (a === "moonflower") finish(m, FP.CASINO.jackpot, "Three Moonflowers! That's the jackpot!");
             else finish(m, FP.CASINO.triple, "Three of a kind! You win big.");
           } else if (a === b || b === c || a === c) finish(m, FP.CASINO.pair, "Two of a kind. That's a small win.");
           else finish(m, FP.CASINO.lose, "Nothing matched. You lose.");
-        } else if (town.modal === m) renderModal();
-      }, 110);
-      renderModal();
+        }
+      }, durs[2] + 150);
     },
   };
 
